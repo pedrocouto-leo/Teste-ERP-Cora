@@ -447,3 +447,231 @@ model CorporateGroup {
 
   @@map("corporate_groups")
 }
+
+// ============================================================
+// GESTAO CONTABIL (Modulo 10)
+// ============================================================
+
+model ChartOfAccounts {
+  id        String    @id @default(uuid()) @db.Uuid
+  companyId String    @db.Uuid
+  name      String    @db.VarChar(200)
+  version   String    @db.VarChar(20)
+  validFrom DateTime  @db.Date
+  validTo   DateTime? @db.Date
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  accounts Account[]
+
+  @@map("charts_of_accounts")
+}
+
+model Account {
+  id            String   @id @default(uuid()) @db.Uuid
+  chartId       String   @db.Uuid
+  parentId      String?  @db.Uuid
+  code          String   @db.VarChar(20)
+  name          String   @db.VarChar(300)
+  level         Int
+  type          String   @db.VarChar(20) // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  nature        String   @db.VarChar(10) // DEBIT, CREDIT
+  cosifCode     String?  @db.VarChar(20)
+  allowsPosting Boolean  @default(false)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  chart    ChartOfAccounts    @relation(fields: [chartId], references: [id])
+  parent   Account?           @relation("AccountTree", fields: [parentId], references: [id])
+  children Account[]          @relation("AccountTree")
+  lines    JournalEntryLine[]
+  balances AccountBalance[]
+
+  @@unique([chartId, code])
+  @@map("accounts")
+}
+
+model AccountingPeriod {
+  id        String    @id @default(uuid()) @db.Uuid
+  companyId String    @db.Uuid
+  year      Int
+  month     Int
+  startDate DateTime  @db.Date
+  endDate   DateTime  @db.Date
+  status    String    @default("OPEN") @db.VarChar(20) // OPEN, CLOSING, CLOSED
+  closedAt  DateTime?
+  closedBy  String?   @db.Uuid
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  journalEntries JournalEntry[]
+  balances       AccountBalance[]
+
+  @@unique([companyId, year, month])
+  @@map("accounting_periods")
+}
+
+model JournalEntry {
+  id          String    @id @default(uuid()) @db.Uuid
+  companyId   String    @db.Uuid
+  periodId    String    @db.Uuid
+  entryNumber Int
+  date        DateTime  @db.Date
+  description String    @db.VarChar(500)
+  type        String    @default("MANUAL") @db.VarChar(20) // MANUAL, AUTO, TEMPLATE
+  status      String    @default("DRAFT") @db.VarChar(20) // DRAFT, PENDING, APPROVED, REJECTED
+  totalDebit  Decimal   @db.Decimal(18, 4)
+  totalCredit Decimal   @db.Decimal(18, 4)
+  createdBy   String    @db.Uuid
+  approvedBy  String?   @db.Uuid
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  period AccountingPeriod   @relation(fields: [periodId], references: [id])
+  lines  JournalEntryLine[]
+
+  @@unique([companyId, entryNumber])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id           String   @id @default(uuid()) @db.Uuid
+  entryId      String   @db.Uuid
+  accountId    String   @db.Uuid
+  type         String   @db.VarChar(10) // DEBIT, CREDIT
+  amount       Decimal  @db.Decimal(18, 4)
+  costCenterId String?  @db.Uuid
+  projectId    String?  @db.Uuid
+  description  String?  @db.VarChar(500)
+  createdAt    DateTime @default(now())
+
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account Account      @relation(fields: [accountId], references: [id])
+
+  @@map("journal_entry_lines")
+}
+
+model AccountBalance {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @db.Uuid
+  accountId      String   @db.Uuid
+  periodId       String   @db.Uuid
+  openingBalance Decimal  @db.Decimal(18, 4)
+  totalDebits    Decimal  @db.Decimal(18, 4)
+  totalCredits   Decimal  @db.Decimal(18, 4)
+  closingBalance Decimal  @db.Decimal(18, 4)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  account Account          @relation(fields: [accountId], references: [id])
+  period  AccountingPeriod @relation(fields: [periodId], references: [id])
+
+  @@unique([companyId, accountId, periodId])
+  @@map("account_balances")
+}
+
+model StandardEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  code        String   @db.VarChar(30)
+  name        String   @db.VarChar(200)
+  description String?  @db.VarChar(500)
+  lines       Json     // template lines array
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@map("standard_entries")
+}
+
+// ============================================================
+// CONTROLE ORÇAMENTÁRIO (Módulo 6)
+// ============================================================
+
+model Budget {
+  id         String    @id @default(uuid()) @db.Uuid
+  companyId  String    @db.Uuid
+  name       String    @db.VarChar(200)
+  year       Int
+  version    Int       @default(1)
+  status     String    @default("DRAFT") @db.VarChar(20) // DRAFT, APPROVED, ACTIVE, CLOSED
+  approvedBy String?   @db.Uuid
+  approvedAt DateTime?
+  createdBy  String    @db.Uuid
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  lines          BudgetLine[]
+  reallocations  BudgetReallocation[]
+
+  @@unique([companyId, year, version])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id           String   @id @default(uuid()) @db.Uuid
+  budgetId     String   @db.Uuid
+  accountId    String   @db.Uuid
+  costCenterId String?  @db.Uuid
+  projectId    String?  @db.Uuid
+  branchId     String?  @db.Uuid
+  jan          Decimal  @default(0) @db.Decimal(18, 4)
+  feb          Decimal  @default(0) @db.Decimal(18, 4)
+  mar          Decimal  @default(0) @db.Decimal(18, 4)
+  apr          Decimal  @default(0) @db.Decimal(18, 4)
+  may          Decimal  @default(0) @db.Decimal(18, 4)
+  jun          Decimal  @default(0) @db.Decimal(18, 4)
+  jul          Decimal  @default(0) @db.Decimal(18, 4)
+  aug          Decimal  @default(0) @db.Decimal(18, 4)
+  sep          Decimal  @default(0) @db.Decimal(18, 4)
+  oct          Decimal  @default(0) @db.Decimal(18, 4)
+  nov          Decimal  @default(0) @db.Decimal(18, 4)
+  dec          Decimal  @default(0) @db.Decimal(18, 4)
+  total        Decimal  @default(0) @db.Decimal(18, 4)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  budget     Budget            @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  executions BudgetExecution[]
+
+  @@unique([budgetId, accountId, costCenterId, branchId])
+  @@map("budget_lines")
+}
+
+model BudgetReallocation {
+  id          String    @id @default(uuid()) @db.Uuid
+  budgetId    String    @db.Uuid
+  fromLineId  String    @db.Uuid
+  toLineId    String    @db.Uuid
+  amount      Decimal   @db.Decimal(18, 4)
+  month       Int       // 1-12
+  reason      String    @db.VarChar(500)
+  status      String    @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  requestedBy String    @db.Uuid
+  approvedBy  String?   @db.Uuid
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  budget Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@map("budget_reallocations")
+}
+
+model BudgetExecution {
+  id             String   @id @default(uuid()) @db.Uuid
+  budgetLineId   String   @db.Uuid
+  month          Int      // 1-12
+  executedAmount Decimal  @db.Decimal(18, 4)
+  documentType   String   @db.VarChar(20) // CP, CR, COMPRAS, CONTRATOS
+  documentId     String   @db.Uuid
+  createdAt      DateTime @default(now())
+
+  budgetLine BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetLineId, month, documentId])
+  @@map("budget_executions")
+}
