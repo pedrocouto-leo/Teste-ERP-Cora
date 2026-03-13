@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// CORE / MULTI-TENANCY
+// ============================================================
+
+model Company {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(200)
+  tradeName String?  @db.VarChar(200)
+  cnpj      String   @unique @db.VarChar(18)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches Branch[]
+  users    User[]
+
+  @@map("companies")
+}
+
+model Branch {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  name      String   @db.VarChar(200)
+  cnpj      String?  @db.VarChar(18)
+  code      String   @db.VarChar(20)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code])
+  @@map("branches")
+}
+
+// ============================================================
+// ACCESS CONTROL (Módulo 7 - Controle de Acesso)
+// ============================================================
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @db.Uuid
+  email          String    @db.VarChar(255)
+  name           String    @db.VarChar(200)
+  passwordHash   String    @db.VarChar(255)
+  active         Boolean   @default(true)
+  mustChangePass Boolean   @default(true)
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  passwordHistory String[] @default([])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?   @db.Uuid
+  updatedBy      String?   @db.Uuid
+
+  company       Company        @relation(fields: [companyId], references: [id])
+  userRoles     UserRole[]
+  refreshTokens RefreshToken[]
+
+  @@unique([companyId, email])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@unique([companyId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  resource    String   @db.VarChar(100)
+  action      String   @db.VarChar(50)
+  description String?  @db.VarChar(500)
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(uuid()) @db.Uuid
+  roleId       String   @db.Uuid
+  permissionId String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  roleId    String    @db.Uuid
+  branchId  String?   @db.Uuid
+  validFrom DateTime  @default(now())
+  validTo   DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, branchId])
+  @@map("user_roles")
+}
+
+model UserAuthorityLimit {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  resource     String   @db.VarChar(100)
+  maxAmount    Decimal  @db.Decimal(18, 4)
+  costCenterId String?  @db.Uuid
+  branchId     String?  @db.Uuid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, resource, costCenterId, branchId])
+  @@map("user_authority_limits")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique @db.VarChar(500)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ============================================================
+// AUDIT TRAIL
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  userId     String   @db.Uuid
+  action     String   @db.VarChar(20)
+  resource   String   @db.VarChar(100)
+  resourceId String?  @db.Uuid
+  before     Json?
+  after      Json?
+  ip         String?  @db.VarChar(45)
+  userAgent  String?  @db.VarChar(500)
+  createdAt  DateTime @default(now())
+
+  @@index([companyId, resource, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// CADASTROS GERAIS (Módulo 1)
+// ============================================================
+
+model CostCenter {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  parentId  String?  @db.Uuid
+  code      String   @db.VarChar(30)
+  name      String   @db.VarChar(200)
+  level     Int      @default(1)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
+
+  parent   CostCenter?  @relation("CostCenterTree", fields: [parentId], references: [id])
+  children CostCenter[] @relation("CostCenterTree")
+
+  @@unique([companyId, code])
+  @@map("cost_centers")
+}
+
+model Project {
+  id        String    @id @default(uuid()) @db.Uuid
+  companyId String    @db.Uuid
+  code      String    @db.VarChar(30)
+  name      String    @db.VarChar(200)
+  startDate DateTime  @db.Date
+  endDate   DateTime? @db.Date
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+
+  @@unique([companyId, code])
+  @@map("projects")
+}
+
+model Supplier {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyId       String   @db.Uuid
+  type            String   @db.VarChar(2) // PF, PJ, EX
+  cpfCnpj         String   @db.VarChar(18)
+  name            String   @db.VarChar(300)
+  tradeName       String?  @db.VarChar(300)
+  email           String?  @db.VarChar(255)
+  phone           String?  @db.VarChar(20)
+  address         String?  @db.VarChar(500)
+  city            String?  @db.VarChar(200)
+  state           String?  @db.VarChar(2)
+  zipCode         String?  @db.VarChar(10)
+  municipalityId  String?  @db.Uuid
+  bankCode        String?  @db.VarChar(10)
+  bankAgency      String?  @db.VarChar(10)
+  bankAccount     String?  @db.VarChar(20)
+  bankAccountType String?  @db.VarChar(2) // CC, CP
+  status          String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  approvedBy      String?  @db.Uuid
+  approvedAt      DateTime?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?  @db.Uuid
+  updatedBy       String?  @db.Uuid
+
+  @@unique([companyId, cpfCnpj])
+  @@map("suppliers")
+}
+
+model Client {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @db.Uuid
+  type           String   @db.VarChar(2) // PF, PJ, EX
+  cpfCnpj        String   @db.VarChar(18)
+  name           String   @db.VarChar(300)
+  tradeName      String?  @db.VarChar(300)
+  email          String?  @db.VarChar(255)
+  phone          String?  @db.VarChar(20)
+  address        String?  @db.VarChar(500)
+  city           String?  @db.VarChar(200)
+  state          String?  @db.VarChar(2)
+  zipCode        String?  @db.VarChar(10)
+  municipalityId String?  @db.Uuid
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?  @db.Uuid
+  updatedBy      String?  @db.Uuid
+
+  @@unique([companyId, cpfCnpj])
+  @@map("clients")
+}
+
+model Bank {
+  id        String   @id @default(uuid()) @db.Uuid
+  compeCode String   @unique @db.VarChar(3)
+  ispbCode  String?  @db.VarChar(8)
+  name      String   @db.VarChar(200)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agencies BankAgency[]
+
+  @@map("banks")
+}
+
+model BankAgency {
+  id        String   @id @default(uuid()) @db.Uuid
+  bankId    String   @db.Uuid
+  code      String   @db.VarChar(10)
+  digit     String?  @db.VarChar(2)
+  name      String?  @db.VarChar(200)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bank         Bank             @relation(fields: [bankId], references: [id])
+  bankAccounts OwnBankAccount[]
+
+  @@unique([bankId, code])
+  @@map("bank_agencies")
+}
+
+model OwnBankAccount {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  branchId     String?  @db.Uuid
+  bankAgencyId String   @db.Uuid
+  accountNum   String   @db.VarChar(20)
+  accountDigit String?  @db.VarChar(2)
+  accountType  String   @db.VarChar(2) // CC, CP, CI
+  description  String?  @db.VarChar(200)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?  @db.Uuid
+  updatedBy    String?  @db.Uuid
+
+  bankAgency BankAgency @relation(fields: [bankAgencyId], references: [id])
+
+  @@unique([companyId, bankAgencyId, accountNum])
+  @@map("own_bank_accounts")
+}
+
+model Currency {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(3)
+  name      String   @db.VarChar(100)
+  symbol    String   @db.VarChar(5)
+  decimals  Int      @default(2)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exchangeRates ExchangeRate[]
+
+  @@map("currencies")
+}
+
+model ExchangeRate {
+  id         String   @id @default(uuid()) @db.Uuid
+  currencyId String   @db.Uuid
+  date       DateTime @db.Date
+  buyRate    Decimal  @db.Decimal(18, 8)
+  sellRate   Decimal  @db.Decimal(18, 8)
+  source     String?  @db.VarChar(50)
+  createdAt  DateTime @default(now())
+
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  @@unique([currencyId, date])
+  @@map("exchange_rates")
+}
+
+model Indexer {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(20)
+  name      String   @db.VarChar(100)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations IndexerQuotation[]
+
+  @@map("indexers")
+}
+
+model IndexerQuotation {
+  id        String   @id @default(uuid()) @db.Uuid
+  indexerId String   @db.Uuid
+  date      DateTime @db.Date
+  value     Decimal  @db.Decimal(18, 8)
+  createdAt DateTime @default(now())
+
+  indexer Indexer @relation(fields: [indexerId], references: [id])
+
+  @@unique([indexerId, date])
+  @@map("indexer_quotations")
+}
+
+model Holiday {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String?  @db.Uuid
+  date         DateTime @db.Date
+  description  String   @db.VarChar(200)
+  scope        String   @db.VarChar(20) // NATIONAL, STATE, MUNICIPAL, COMPANY
+  state        String?  @db.VarChar(2)
+  municipalityCode String? @db.VarChar(7)
+  createdAt    DateTime @default(now())
+
+  @@map("holidays")
+}
+
+model Municipality {
+  id        String   @id @default(uuid()) @db.Uuid
+  ibgeCode  String   @unique @db.VarChar(7)
+  name      String   @db.VarChar(200)
+  state     String   @db.VarChar(2)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("municipalities")
+}
+
+model ProductServiceCode {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  code        String   @db.VarChar(20)
+  description String   @db.VarChar(500)
+  type        String   @db.VarChar(10) // PRODUCT, SERVICE
+  nbs         String?  @db.VarChar(20) // Nomenclatura Brasileira de Servicos
+  ncm         String?  @db.VarChar(10) // NCM for products
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@map("product_service_codes")
+}
+
+model TaxParameter {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  taxType      String   @db.VarChar(20) // IR, CSLL, PIS, COFINS, ISS, INSS
+  rate         Decimal  @db.Decimal(8, 4)
+  minAmount    Decimal? @db.Decimal(18, 4)
+  validFrom    DateTime @db.Date
+  validTo      DateTime? @db.Date
+  description  String?  @db.VarChar(200)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("tax_parameters")
+}
+
+model CorporateGroup {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(200)
+  code      String   @unique @db.VarChar(30)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("corporate_groups")
+}

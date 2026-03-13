@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cora
+          POSTGRES_PASSWORD: cora_secret
+          POSTGRES_DB: cora_erp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://cora:cora_secret@localhost:5432/cora_erp_test?schema=public
+      JWT_SECRET: test-secret-min-32-chars-long-for-ci
+      JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma Client
+        run: cd apps/api && npx prisma generate
+
+      - name: Run migrations
+        run: cd apps/api && npx prisma db push
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Test API
+        run: cd apps/api && npm test -- --passWithNoTests
+
+      - name: Test Shared
+        run: cd packages/shared && npm test -- --passWithNoTests
+
+      - name: Build API
+        run: cd apps/api && npm run build
+
+      - name: Build Web
+        run: cd apps/web && npm run build
