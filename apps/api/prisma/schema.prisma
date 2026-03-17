@@ -675,3 +675,693 @@ model BudgetExecution {
   @@unique([budgetLineId, month, documentId])
   @@map("budget_executions")
 }
+
+// ============================================================
+// CAIXAS E BANCOS (Modulo 2)
+// ============================================================
+
+model CashAccount {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  branchId     String?  @db.Uuid
+  name         String   @db.VarChar(200)
+  type         String   @db.VarChar(20) // CASH, BANK, INVESTMENT
+  bankAccountId String? @db.Uuid
+  balance      Decimal  @default(0) @db.Decimal(18, 4)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?  @db.Uuid
+  updatedBy    String?  @db.Uuid
+
+  movements CashMovement[]
+
+  @@unique([companyId, name])
+  @@map("cash_accounts")
+}
+
+model CashMovement {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @db.Uuid
+  cashAccountId  String   @db.Uuid
+  date           DateTime @db.Date
+  type           String   @db.VarChar(10) // CREDIT, DEBIT
+  amount         Decimal  @db.Decimal(18, 4)
+  balanceAfter   Decimal  @db.Decimal(18, 4)
+  description    String   @db.VarChar(500)
+  category       String   @db.VarChar(50) // MANUAL, AP_PAYMENT, AR_RECEIPT, TRANSFER, CNAB
+  sourceModule   String?  @db.VarChar(50)
+  sourceId       String?  @db.Uuid
+  costCenterId   String?  @db.Uuid
+  projectId      String?  @db.Uuid
+  reconciled     Boolean  @default(false)
+  reconciledAt   DateTime?
+  createdAt      DateTime @default(now())
+  createdBy      String?  @db.Uuid
+
+  cashAccount CashAccount @relation(fields: [cashAccountId], references: [id])
+
+  @@index([companyId, cashAccountId, date])
+  @@map("cash_movements")
+}
+
+model BankStatement {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @db.Uuid
+  cashAccountId  String   @db.Uuid
+  importDate     DateTime @default(now())
+  startDate      DateTime @db.Date
+  endDate        DateTime @db.Date
+  openingBalance Decimal  @db.Decimal(18, 4)
+  closingBalance Decimal  @db.Decimal(18, 4)
+  fileName       String?  @db.VarChar(255)
+  format         String   @db.VarChar(20) // CNAB240, OFX, CSV
+  status         String   @default("IMPORTED") @db.VarChar(20) // IMPORTED, RECONCILING, RECONCILED
+  createdAt      DateTime @default(now())
+  createdBy      String?  @db.Uuid
+
+  lines BankStatementLine[]
+
+  @@map("bank_statements")
+}
+
+model BankStatementLine {
+  id             String   @id @default(uuid()) @db.Uuid
+  statementId    String   @db.Uuid
+  date           DateTime @db.Date
+  amount         Decimal  @db.Decimal(18, 4)
+  type           String   @db.VarChar(10) // CREDIT, DEBIT
+  description    String   @db.VarChar(500)
+  documentNumber String?  @db.VarChar(50)
+  reconciled     Boolean  @default(false)
+  matchedMovementId String? @db.Uuid
+  createdAt      DateTime @default(now())
+
+  statement BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@map("bank_statement_lines")
+}
+
+// ============================================================
+// CONTAS A PAGAR (Módulo 4)
+// ============================================================
+
+model PayableTitle {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @db.Uuid
+  branchId        String?   @db.Uuid
+  supplierId      String    @db.Uuid
+  titleNumber     String    @db.VarChar(50)
+  installment     Int       @default(1)
+  issueDate       DateTime  @db.Date
+  dueDate         DateTime  @db.Date
+  originalAmount  Decimal   @db.Decimal(18, 4)
+  netAmount       Decimal   @db.Decimal(18, 4)
+  paidAmount      Decimal   @default(0) @db.Decimal(18, 4)
+  balance         Decimal   @db.Decimal(18, 4)
+  currencyCode    String    @default("BRL") @db.VarChar(3)
+  exchangeRate    Decimal   @default(1) @db.Decimal(18, 8)
+  status          String    @default("OPEN") @db.VarChar(20)  // OPEN, PARTIAL, PAID, CANCELLED, OVERDUE
+  approvalStatus  String    @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  paymentMethod   String?   @db.VarChar(20) // BOLETO, TED, PIX, CHEQUE, DDA, CNAB
+  barcode         String?   @db.VarChar(60)
+  description     String?   @db.VarChar(500)
+  nfNumber        String?   @db.VarChar(50)
+  nfSeries        String?   @db.VarChar(10)
+  sourceModule    String?   @db.VarChar(50) // COMPRAS, CONTRATOS, MANUAL
+  sourceId        String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?   @db.Uuid
+  updatedBy       String?   @db.Uuid
+  approvedBy      String?   @db.Uuid
+  approvedAt      DateTime?
+
+  costAllocations PayableCostAllocation[]
+  taxes           PayableTax[]
+  approvals       PayableApproval[]
+
+  @@index([companyId, status, dueDate])
+  @@index([companyId, supplierId])
+  @@map("payable_titles")
+}
+
+model PayableCostAllocation {
+  id           String  @id @default(uuid()) @db.Uuid
+  titleId      String  @db.Uuid
+  costCenterId String  @db.Uuid
+  projectId    String? @db.Uuid
+  branchId     String? @db.Uuid
+  percentage   Decimal @db.Decimal(8, 4)
+  amount       Decimal @db.Decimal(18, 4)
+
+  title PayableTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@map("payable_cost_allocations")
+}
+
+model PayableTax {
+  id        String  @id @default(uuid()) @db.Uuid
+  titleId   String  @db.Uuid
+  taxType   String  @db.VarChar(20) // IR, CSLL, PIS, COFINS, ISS, INSS
+  baseAmount Decimal @db.Decimal(18, 4)
+  rate      Decimal @db.Decimal(8, 4)
+  amount    Decimal @db.Decimal(18, 4)
+  withheld  Boolean @default(true)
+
+  title PayableTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@map("payable_taxes")
+}
+
+model PayableApproval {
+  id        String   @id @default(uuid()) @db.Uuid
+  titleId   String   @db.Uuid
+  step      Int      // 1-4 approval steps
+  userId    String   @db.Uuid
+  action    String   @db.VarChar(20) // APPROVED, REJECTED
+  comments  String?  @db.VarChar(500)
+  createdAt DateTime @default(now())
+
+  title PayableTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@map("payable_approvals")
+}
+
+// ============================================================
+// CONTAS A RECEBER (Módulo 5)
+// ============================================================
+
+model ReceivableTitle {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @db.Uuid
+  branchId        String?   @db.Uuid
+  clientId        String    @db.Uuid
+  titleNumber     String    @db.VarChar(50)
+  installment     Int       @default(1)
+  issueDate       DateTime  @db.Date
+  dueDate         DateTime  @db.Date
+  originalAmount  Decimal   @db.Decimal(18, 4)
+  netAmount       Decimal   @db.Decimal(18, 4)
+  receivedAmount  Decimal   @default(0) @db.Decimal(18, 4)
+  balance         Decimal   @db.Decimal(18, 4)
+  currencyCode    String    @default("BRL") @db.VarChar(3)
+  status          String    @default("OPEN") @db.VarChar(20) // OPEN, PARTIAL, PAID, CANCELLED, OVERDUE, NEGOTIATED
+  source          String    @default("MANUAL") @db.VarChar(50) // MANUAL, FATURAMENTO, API
+  sourceId        String?   @db.Uuid
+  description     String?   @db.VarChar(500)
+  nfNumber        String?   @db.VarChar(50)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?   @db.Uuid
+  updatedBy       String?   @db.Uuid
+
+  boletos       Boleto[]
+  negotiations  ClientNegotiation[]
+
+  @@index([companyId, status, dueDate])
+  @@index([companyId, clientId])
+  @@map("receivable_titles")
+}
+
+model Boleto {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @db.Uuid
+  receivableId    String    @db.Uuid
+  ourNumber       String    @db.VarChar(20)
+  barcode         String?   @db.VarChar(60)
+  digitableLine   String?   @db.VarChar(60)
+  bankAccountId   String    @db.Uuid
+  amount          Decimal   @db.Decimal(18, 4)
+  dueDate         DateTime  @db.Date
+  status          String    @default("GENERATED") @db.VarChar(20) // GENERATED, SENT, PAID, CANCELLED, PROTESTED
+  paidAt          DateTime?
+  paidAmount      Decimal?  @db.Decimal(18, 4)
+  registrationStatus String? @db.VarChar(20) // PENDING, REGISTERED, REJECTED
+  cnabRemessaId   String?   @db.Uuid
+  cnabRetornoId   String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  receivable ReceivableTitle @relation(fields: [receivableId], references: [id])
+
+  @@unique([companyId, ourNumber])
+  @@map("boletos")
+}
+
+model ClientNegotiation {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyId       String   @db.Uuid
+  clientId        String   @db.Uuid
+  receivableId    String   @db.Uuid
+  type            String   @db.VarChar(30) // DISCOUNT, EXTENSION, INSTALLMENT, WRITE_OFF
+  originalAmount  Decimal  @db.Decimal(18, 4)
+  negotiatedAmount Decimal @db.Decimal(18, 4)
+  discountAmount  Decimal  @default(0) @db.Decimal(18, 4)
+  newDueDate      DateTime? @db.Date
+  installments    Int      @default(1)
+  status          String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED, EXECUTED
+  approvedBy      String?  @db.Uuid
+  approvedAt      DateTime?
+  comments        String?  @db.VarChar(500)
+  createdAt       DateTime @default(now())
+  createdBy       String?  @db.Uuid
+
+  receivable ReceivableTitle @relation(fields: [receivableId], references: [id])
+
+  @@map("client_negotiations")
+}
+
+// ============================================================
+// COMPRAS E RECEBIMENTO (Módulo 3)
+// ============================================================
+
+model PurchaseRequest {
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @db.Uuid
+  description    String    @db.VarChar(500)
+  needByDate     DateTime? @db.Date
+  costCenterId   String?   @db.Uuid
+  projectId      String?   @db.Uuid
+  status         String    @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED, COMPLETED
+  totalEstimated Decimal   @default(0) @db.Decimal(18, 4)
+  approvedBy     String?   @db.Uuid
+  approvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?   @db.Uuid
+
+  items      PurchaseRequestItem[]
+  quotations Quotation[]
+
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id                   String  @id @default(uuid()) @db.Uuid
+  requestId            String  @db.Uuid
+  lineNumber           Int
+  description          String  @db.VarChar(500)
+  quantity             Decimal @db.Decimal(18, 4)
+  unit                 String  @default("UN") @db.VarChar(10)
+  estimatedUnitPrice   Decimal @default(0) @db.Decimal(18, 4)
+  productServiceCodeId String? @db.Uuid
+
+  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_request_items")
+}
+
+model Quotation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  companyId          String    @db.Uuid
+  purchaseRequestId  String    @db.Uuid
+  supplierId         String    @db.Uuid
+  validUntil         DateTime? @db.Date
+  paymentTerms       String?   @db.VarChar(200)
+  deliveryTerms      String?   @db.VarChar(200)
+  deliveryDays       Int?
+  totalAmount        Decimal   @db.Decimal(18, 4)
+  status             String    @default("PENDING") @db.VarChar(20) // PENDING, SELECTED, REJECTED
+  selectedBy         String?   @db.Uuid
+  selectedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  createdBy          String?   @db.Uuid
+
+  request PurchaseRequest @relation(fields: [purchaseRequestId], references: [id])
+  items   QuotationItem[]
+
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  quotationId String  @db.Uuid
+  lineNumber  Int
+  description String  @db.VarChar(500)
+  quantity    Decimal @db.Decimal(18, 4)
+  unit        String  @default("UN") @db.VarChar(10)
+  unitPrice   Decimal @db.Decimal(18, 4)
+  discount    Decimal @default(0) @db.Decimal(18, 4)
+  totalPrice  Decimal @db.Decimal(18, 4)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@map("quotation_items")
+}
+
+model PurchaseOrder {
+  id                   String    @id @default(uuid()) @db.Uuid
+  companyId            String    @db.Uuid
+  orderNumber          String    @db.VarChar(20)
+  supplierId           String    @db.Uuid
+  quotationId          String?   @db.Uuid
+  purchaseRequestId    String?   @db.Uuid
+  costCenterId         String?   @db.Uuid
+  projectId            String?   @db.Uuid
+  expectedDeliveryDate DateTime? @db.Date
+  paymentTerms         String?   @db.VarChar(200)
+  currencyCode         String    @default("BRL") @db.VarChar(3)
+  totalAmount          Decimal   @db.Decimal(18, 4)
+  status               String    @default("DRAFT") @db.VarChar(20) // DRAFT, PENDING, APPROVED, REJECTED, PARTIAL_RECEIVED, RECEIVED, CANCELLED
+  approvedBy           String?   @db.Uuid
+  approvedAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String?   @db.Uuid
+
+  items     PurchaseOrderItem[]
+  receivings Receiving[]
+
+  @@unique([companyId, orderNumber])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               String  @id @default(uuid()) @db.Uuid
+  orderId          String  @db.Uuid
+  lineNumber       Int
+  description      String  @db.VarChar(500)
+  quantity         Decimal @db.Decimal(18, 4)
+  unit             String  @default("UN") @db.VarChar(10)
+  unitPrice        Decimal @db.Decimal(18, 4)
+  totalPrice       Decimal @db.Decimal(18, 4)
+  receivedQuantity Decimal @default(0) @db.Decimal(18, 4)
+
+  order PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_order_items")
+}
+
+model Receiving {
+  id               String   @id @default(uuid()) @db.Uuid
+  companyId        String   @db.Uuid
+  receivingNumber  String   @db.VarChar(20)
+  purchaseOrderId  String   @db.Uuid
+  receivingDate    DateTime @db.Date
+  nfNumber         String?  @db.VarChar(50)
+  nfSeries         String?  @db.VarChar(10)
+  nfAccessKey      String?  @db.VarChar(50)
+  totalAmount      Decimal  @db.Decimal(18, 4)
+  status           String   @default("RECEIVED") @db.VarChar(20)
+  comments         String?  @db.VarChar(500)
+  createdAt        DateTime @default(now())
+  createdBy        String?  @db.Uuid
+
+  order PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  items ReceivingItem[]
+
+  @@unique([companyId, receivingNumber])
+  @@map("receivings")
+}
+
+model ReceivingItem {
+  id               String  @id @default(uuid()) @db.Uuid
+  receivingId      String  @db.Uuid
+  lineNumber       Int
+  description      String  @db.VarChar(500)
+  quantityReceived Decimal @db.Decimal(18, 4)
+  unitPrice        Decimal @db.Decimal(18, 4)
+  totalPrice       Decimal @db.Decimal(18, 4)
+  unit             String  @default("UN") @db.VarChar(10)
+  orderItemId      String? @db.Uuid
+
+  receiving Receiving @relation(fields: [receivingId], references: [id], onDelete: Cascade)
+
+  @@map("receiving_items")
+}
+
+// ============================================================
+// CONTROLE DE CONTRATOS (Módulo 8)
+// ============================================================
+
+model Contract {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @db.Uuid
+  contractNumber  String    @db.VarChar(30)
+  supplierId      String    @db.Uuid
+  type            String    @db.VarChar(20) // FIXED, VARIABLE, INSTALLMENT, INDEFINITE
+  description     String    @db.VarChar(500)
+  totalValue      Decimal   @db.Decimal(18, 4)
+  startDate       DateTime  @db.Date
+  endDate         DateTime? @db.Date
+  autoRenew       Boolean   @default(false)
+  renewalMonths   Int?
+  indexerId       String?   @db.Uuid
+  status          String    @default("DRAFT") @db.VarChar(20) // DRAFT, PENDING, ACTIVE, SUSPENDED, FINISHED, CANCELLED
+  approvalStatus  String    @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  approvedBy      String?   @db.Uuid
+  approvedAt      DateTime?
+  costCenterId    String?   @db.Uuid
+  projectId       String?   @db.Uuid
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?   @db.Uuid
+  updatedBy       String?   @db.Uuid
+
+  installments ContractInstallment[]
+  addendums    ContractAddendum[]
+
+  @@unique([companyId, contractNumber])
+  @@map("contracts")
+}
+
+model ContractInstallment {
+  id          String    @id @default(uuid()) @db.Uuid
+  contractId  String    @db.Uuid
+  number      Int
+  dueDate     DateTime  @db.Date
+  amount      Decimal   @db.Decimal(18, 4)
+  status      String    @default("PENDING") @db.VarChar(20) // PENDING, RELEASED, PAID
+  payableId   String?   @db.Uuid
+  releasedAt  DateTime?
+  releasedBy  String?   @db.Uuid
+  createdAt   DateTime  @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, number])
+  @@map("contract_installments")
+}
+
+model ContractAddendum {
+  id          String   @id @default(uuid()) @db.Uuid
+  contractId  String   @db.Uuid
+  number      Int
+  description String   @db.VarChar(500)
+  valueChange Decimal? @db.Decimal(18, 4)
+  newEndDate  DateTime? @db.Date
+  approvedBy  String?  @db.Uuid
+  approvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  createdBy   String?  @db.Uuid
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, number])
+  @@map("contract_addendums")
+}
+
+// ============================================================
+// FATURAMENTO (Módulo 9)
+// ============================================================
+
+model Invoice {
+  id            String    @id @default(uuid()) @db.Uuid
+  companyId     String    @db.Uuid
+  branchId      String?   @db.Uuid
+  invoiceNumber String    @db.VarChar(30)
+  clientId      String    @db.Uuid
+  issueDate     DateTime  @db.Date
+  dueDate       DateTime  @db.Date
+  description   String?   @db.VarChar(500)
+  subtotal      Decimal   @db.Decimal(18, 4)
+  taxTotal      Decimal   @default(0) @db.Decimal(18, 4)
+  totalAmount   Decimal   @db.Decimal(18, 4)
+  currencyCode  String    @default("BRL") @db.VarChar(3)
+  exchangeRate  Decimal   @default(1) @db.Decimal(18, 8)
+  status        String    @default("DRAFT") @db.VarChar(20) // DRAFT, ISSUED, CANCELLED
+  nfseNumber    String?   @db.VarChar(30)
+  nfseStatus    String?   @db.VarChar(20) // PENDING, EMITTED, CANCELLED, ERROR
+  costCenterId  String?   @db.Uuid
+  projectId     String?   @db.Uuid
+  receivableId  String?   @db.Uuid
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String?   @db.Uuid
+  updatedBy     String?   @db.Uuid
+
+  items  InvoiceItem[]
+  taxes  InvoiceTax[]
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId, clientId])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id             String  @id @default(uuid()) @db.Uuid
+  invoiceId      String  @db.Uuid
+  sequence       Int
+  description    String  @db.VarChar(500)
+  serviceCode    String? @db.VarChar(20)
+  quantity       Decimal @db.Decimal(18, 4)
+  unitPrice      Decimal @db.Decimal(18, 4)
+  totalPrice     Decimal @db.Decimal(18, 4)
+  createdAt      DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model InvoiceTax {
+  id         String  @id @default(uuid()) @db.Uuid
+  invoiceId  String  @db.Uuid
+  taxType    String  @db.VarChar(20) // ISS, IR, CSLL, PIS, COFINS, INSS
+  baseAmount Decimal @db.Decimal(18, 4)
+  rate       Decimal @db.Decimal(8, 4)
+  amount     Decimal @db.Decimal(18, 4)
+  withheld   Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_taxes")
+}
+
+// ============================================================
+// GESTÃO PATRIMONIAL (Módulo 11)
+// ============================================================
+
+model AssetGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  code        String   @db.VarChar(20)
+  name        String   @db.VarChar(200)
+  usefulLife  Int      // months
+  deprecRate  Decimal  @db.Decimal(8, 4) // annual %
+  accountId   String?  @db.Uuid // conta contábil
+  depAccountId String? @db.Uuid // conta de depreciação
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assets Asset[]
+
+  @@unique([companyId, code])
+  @@map("asset_groups")
+}
+
+model Asset {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @db.Uuid
+  assetNumber     String    @db.VarChar(30)
+  description     String    @db.VarChar(500)
+  groupId         String    @db.Uuid
+  acquisitionDate DateTime  @db.Date
+  acquisitionValue Decimal  @db.Decimal(18, 4)
+  residualValue   Decimal   @default(0) @db.Decimal(18, 4)
+  currentValue    Decimal   @db.Decimal(18, 4)
+  accumulatedDeprec Decimal @default(0) @db.Decimal(18, 4)
+  costCenterId    String?   @db.Uuid
+  branchId        String?   @db.Uuid
+  location        String?   @db.VarChar(200)
+  serialNumber    String?   @db.VarChar(100)
+  invoiceNumber   String?   @db.VarChar(30)
+  supplierId      String?   @db.Uuid
+  status          String    @default("ACTIVE") @db.VarChar(20) // ACTIVE, TRANSFERRED, WRITTEN_OFF, SOLD
+  writtenOffAt    DateTime?
+  writtenOffBy    String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?   @db.Uuid
+  updatedBy       String?   @db.Uuid
+
+  group          AssetGroup         @relation(fields: [groupId], references: [id])
+  depreciations  AssetDepreciation[]
+  transfers      AssetTransfer[]
+
+  @@unique([companyId, assetNumber])
+  @@index([companyId, status])
+  @@map("assets")
+}
+
+model AssetDepreciation {
+  id           String   @id @default(uuid()) @db.Uuid
+  assetId      String   @db.Uuid
+  periodYear   Int
+  periodMonth  Int
+  amount       Decimal  @db.Decimal(18, 4)
+  accumulated  Decimal  @db.Decimal(18, 4)
+  bookValue    Decimal  @db.Decimal(18, 4)
+  createdAt    DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, periodYear, periodMonth])
+  @@map("asset_depreciations")
+}
+
+model AssetTransfer {
+  id              String   @id @default(uuid()) @db.Uuid
+  assetId         String   @db.Uuid
+  fromCostCenter  String?  @db.Uuid
+  toCostCenter    String?  @db.Uuid
+  fromBranch      String?  @db.Uuid
+  toBranch        String?  @db.Uuid
+  transferDate    DateTime @db.Date
+  reason          String?  @db.VarChar(500)
+  createdAt       DateTime @default(now())
+  createdBy       String?  @db.Uuid
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("asset_transfers")
+}
+
+// ============================================================
+// LIQUIDAÇÃO FINANCEIRA (Módulo 14)
+// ============================================================
+
+model Settlement {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @db.Uuid
+  settlementNumber String   @db.VarChar(30)
+  type            String    @db.VarChar(20) // PAYMENT, RECEIPT, TRANSFER
+  sourceModule    String    @db.VarChar(30) // contas-pagar, contas-receber, caixa-bancos
+  sourceId        String?   @db.Uuid
+  amount          Decimal   @db.Decimal(18, 4)
+  date            DateTime  @db.Date
+  description     String?   @db.VarChar(500)
+  status          String    @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, SETTLED, CANCELLED
+  approvedBy      String?   @db.Uuid
+  approvedAt      DateTime?
+  settledAt       DateTime?
+  bankAccountId   String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?   @db.Uuid
+
+  approvals SettlementApproval[]
+
+  @@unique([companyId, settlementNumber])
+  @@index([companyId, status, date])
+  @@map("settlements")
+}
+
+model SettlementApproval {
+  id           String   @id @default(uuid()) @db.Uuid
+  settlementId String   @db.Uuid
+  step         Int
+  userId       String   @db.Uuid
+  action       String   @db.VarChar(20) // APPROVED, REJECTED
+  comments     String?  @db.VarChar(500)
+  createdAt    DateTime @default(now())
+
+  settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@map("settlement_approvals")
+}
