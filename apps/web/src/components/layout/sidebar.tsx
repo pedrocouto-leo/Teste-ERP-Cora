@@ -41,7 +41,14 @@ const navigation: NavItem[] = [
   { label: 'Patrimônio', href: '/dashboard/patrimonio', icon: '🏗️' },
   { label: 'Liquidação', href: '/dashboard/liquidacao', icon: '✅' },
   { label: 'Informes Fiscais', href: '/dashboard/informes-fiscais', icon: '📊' },
-  { label: 'Informes Legais', href: '/dashboard/informes-legais', icon: '⚖️' },
+  {
+    label: 'Informes Legais',
+    href: '/dashboard/informes-legais',
+    icon: '⚖️',
+    children: [
+      { label: 'DDR - Doc 2011', href: '/dashboard/informes-legais/ddr', icon: '📄' },
+    ],
+  },
   {
     label: 'Controle de Acesso',
     href: '/dashboard/acesso',

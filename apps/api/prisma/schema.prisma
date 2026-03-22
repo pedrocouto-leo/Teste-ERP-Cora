@@ -20,8 +20,9 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches Branch[]
-  users    User[]
+  branches   Branch[]
+  users      User[]
+  ddrReports DdrReport[]
 
   @@map("companies")
 }
@@ -1364,4 +1365,68 @@ model SettlementApproval {
   settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
 
   @@map("settlement_approvals")
+}
+
+// ============================================================
+// DDR - Documento 2011 (Demonstrativo Diário de Risco)
+// ============================================================
+
+model DdrReport {
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @db.Uuid
+  referenceDate  DateTime  @db.Date
+  status         String    @default("DRAFT") @db.VarChar(20) // DRAFT, PENDING_REVIEW, APPROVED, SUBMITTED, REJECTED
+  reviewedBy     String?   @db.Uuid
+  reviewedAt     DateTime?
+  approvedBy     String?   @db.Uuid
+  approvedAt     DateTime?
+  submittedAt    DateTime?
+  protocolNumber String?   @db.VarChar(50)
+  notes          String?
+  createdBy      String    @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  updatedBy      String?   @db.Uuid
+
+  company    Company        @relation(fields: [companyId], references: [id])
+  entries    DdrEntry[]
+  parameters DdrParameter[]
+
+  @@unique([companyId, referenceDate])
+  @@index([companyId, status])
+  @@map("ddr_reports")
+}
+
+model DdrEntry {
+  id           String   @id @default(uuid()) @db.Uuid
+  reportId     String   @db.Uuid
+  accountCode  String   @db.VarChar(6)
+  currencyCode String?  @db.VarChar(3)
+  countryCode  String?  @db.VarChar(2)
+  positionType Int?
+  value        Decimal  @db.Decimal(18, 2)
+  isCalculated Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  report DdrReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, accountCode, currencyCode, countryCode, positionType])
+  @@index([reportId])
+  @@index([accountCode])
+  @@map("ddr_entries")
+}
+
+model DdrParameter {
+  id            String   @id @default(uuid()) @db.Uuid
+  reportId      String   @db.Uuid
+  parameterCode String   @db.VarChar(20)
+  value         Decimal  @db.Decimal(18, 8)
+  source        String?  @db.VarChar(100)
+  createdAt     DateTime @default(now())
+
+  report DdrReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, parameterCode])
+  @@map("ddr_parameters")
 }
