@@ -41,7 +41,7 @@ export class DepreciationService {
   /**
    * Simulate depreciation for a given period without persisting.
    */
-  async simulate(companyId: string, year: number, month: number): Promise<DepreciationResult[]> {
+  async simulate(companyId: string, _year: number, _month: number): Promise<DepreciationResult[]> {
     const assets = await this.prisma.asset.findMany({
       where: { companyId, status: 'ACTIVE' },
       include: { group: true },

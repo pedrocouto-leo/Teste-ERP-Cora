@@ -1,8 +1,8 @@
-import { Controller, Post, Get, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { EfdReinfService } from './efd-reinf.service';
-import { GenerateEfdReinfDto, TransmitEfdReinfDto } from './dto/efd-reinf.dto';
+import { EfdReinfService, ReinfEvent } from './efd-reinf.service';
+import { GenerateEfdReinfDto } from './dto/efd-reinf.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { TenantId } from '../../common/decorators/tenant.decorator';
@@ -36,19 +36,24 @@ export class EfdReinfController {
   }
 
   @Post('transmit')
-  @ApiOperation({ summary: 'Transmitir evento para a RFB' })
-  async transmit(@Body() dto: TransmitEfdReinfDto) {
-    const result = await this.efdReinfService.transmit(
-      dto.eventId,
-      dto.certificateBase64,
-    );
+  @ApiOperation({ summary: 'Transmitir evento já gerado para a RFB' })
+  async transmit(@Body() event: ReinfEvent) {
+    const result = await this.efdReinfService.transmitEvent(event);
     return { data: result };
   }
 
   @Post('r9000')
-  @ApiOperation({ summary: 'Gerar evento R-9000 (Exclusão)' })
-  async generateR9000(@Query('eventId') eventId: string) {
-    const result = await this.efdReinfService.generateR9000(eventId);
+  @ApiOperation({ summary: 'Gerar evento R-9000 (Exclusão de evento prévio)' })
+  async generateR9000(
+    @TenantId() companyId: string,
+    @Query('eventType') eventType: 'R-4010' | 'R-4020',
+    @Query('receipt') receipt: string,
+  ) {
+    const result = await this.efdReinfService.generateR9000(
+      companyId,
+      eventType,
+      receipt,
+    );
     return { data: result };
   }
 }

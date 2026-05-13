@@ -6,7 +6,6 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -18,7 +17,6 @@ import { CreateChartOfAccountsDto, UpdateChartOfAccountsDto } from './dto/chart-
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { TenantId } from '../../common/decorators/tenant.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Plano de Contas')
 @Controller('contabilidade/charts')

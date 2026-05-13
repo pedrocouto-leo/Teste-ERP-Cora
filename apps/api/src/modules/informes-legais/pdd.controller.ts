@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { PddService } from './pdd.service';

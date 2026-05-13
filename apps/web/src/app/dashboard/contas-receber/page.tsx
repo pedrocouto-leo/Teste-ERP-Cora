@@ -71,7 +71,6 @@ export default function ContasReceberListPage() {
 
   useEffect(() => {
     fetchTitles();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   return (

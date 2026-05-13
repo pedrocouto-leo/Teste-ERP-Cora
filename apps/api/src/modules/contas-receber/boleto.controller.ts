@@ -17,7 +17,6 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { TenantId } from '../../common/decorators/tenant.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Contas a Receber - Boletos')
 @Controller('contas-receber/boletos')

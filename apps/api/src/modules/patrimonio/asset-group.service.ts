@@ -107,7 +107,7 @@ export class AssetGroupService {
   }
 
   async delete(companyId: string, id: string) {
-    const group = await this.findOne(companyId, id);
+    await this.findOne(companyId, id);
 
     const assetCount = await this.prisma.asset.count({
       where: { groupId: id, status: 'ACTIVE' },

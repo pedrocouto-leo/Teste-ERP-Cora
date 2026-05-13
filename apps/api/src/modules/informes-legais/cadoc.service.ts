@@ -47,7 +47,6 @@ export class CadocService {
    * Formato XML para BACEN
    */
   async generateCadoc4111(companyId: string, date: string) {
-    const targetDate = new Date(date);
 
     // Buscar saldos contábeis
     const balances = await this.prisma.accountBalance.findMany({

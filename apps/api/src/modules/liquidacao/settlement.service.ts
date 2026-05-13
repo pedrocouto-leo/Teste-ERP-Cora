@@ -206,7 +206,7 @@ export class SettlementService {
     });
   }
 
-  async settle(companyId: string, id: string, userId: string) {
+  async settle(companyId: string, id: string, _userId: string) {
     const settlement = await this.findOne(companyId, id);
 
     if (settlement.status !== 'APPROVED') {
@@ -225,7 +225,7 @@ export class SettlementService {
     });
   }
 
-  async cancel(companyId: string, id: string, userId: string) {
+  async cancel(companyId: string, id: string, _userId: string) {
     const settlement = await this.findOne(companyId, id);
 
     if (settlement.status !== 'PENDING') {

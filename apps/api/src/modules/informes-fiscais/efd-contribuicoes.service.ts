@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SpedBuilder, SpedServiceDoc } from './sped-builder';
 
 @Injectable()
 export class EfdContribuicoesService {
@@ -8,96 +9,99 @@ export class EfdContribuicoesService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Gera escrituração EFD Contribuições (PIS/COFINS)
-   * Layout: Blocos 0, A, C, D, F, M, 1, 9
+   * Gera escrituração EFD-Contribuições (PIS/COFINS).
+   * Retorna o resumo dos blocos e os totais para o usuário visualizar.
    */
   async generate(companyId: string, year: number, month: number) {
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    const company = await this.prisma.company.findFirst({ where: { id: companyId } });
+    if (!company) throw new BadRequestException('Empresa não encontrada');
 
-    // Bloco 0 - Abertura e identificação
-    const company = await this.prisma.company.findFirst({
-      where: { id: companyId },
-    });
+    const { startDate, endDate } = this.periodRange(year, month);
 
-    // Bloco F - Demais documentos e operações (serviços)
-    const invoices = await this.prisma.invoice?.findMany({
+    const invoices = await this.prisma.invoice.findMany({
       where: {
         companyId,
         issueDate: { gte: startDate, lte: endDate },
         status: 'ISSUED',
       },
       include: { taxes: true },
-    }).catch(() => []);
-
-    // Bloco A - Documentos fiscais (serviços)
-    const payables = await this.prisma.payableTitle.findMany({
-      where: {
-        companyId,
-        issueDate: { gte: startDate, lte: endDate },
-      },
     });
 
-    const payableTaxes = [];
-    for (const p of payables) {
-      const taxes = await this.prisma.payableTax.findMany({
-        where: {
-          titleId: p.id,
-          taxType: { in: ['PIS', 'COFINS'] },
-        },
+    let pisTotal = 0;
+    let cofinsTotal = 0;
+    const docs: SpedServiceDoc[] = [];
+
+    for (const inv of invoices) {
+      const pis = inv.taxes.find((t) => t.taxType === 'PIS');
+      const cofins = inv.taxes.find((t) => t.taxType === 'COFINS');
+      const pisAmount = Number(pis?.amount ?? 0);
+      const cofinsAmount = Number(cofins?.amount ?? 0);
+      pisTotal += pisAmount;
+      cofinsTotal += cofinsAmount;
+      docs.push({
+        documentId: inv.invoiceNumber,
+        issueDate: inv.issueDate,
+        totalValue: Number(inv.totalAmount),
+        pisAmount,
+        cofinsAmount,
+        baseAmount: Number(inv.subtotal),
       });
-      if (taxes.length > 0) {
-        payableTaxes.push({ payable: p, taxes });
-      }
     }
 
-    // Bloco M - Apuração da contribuição e crédito
-    const pisTotal = payableTaxes.reduce((sum, pt) => {
-      const pis = pt.taxes.find((t: { taxType: string }) => t.taxType === 'PIS');
-      return sum + (pis ? Number(pis.amount) : 0);
-    }, 0);
-
-    const cofinsTotal = payableTaxes.reduce((sum, pt) => {
-      const cofins = pt.taxes.find((t: { taxType: string }) => t.taxType === 'COFINS');
-      return sum + (cofins ? Number(cofins.amount) : 0);
-    }, 0);
-
     return {
-      period: `${year}-${String(month).padStart(2, '0')}`,
-      company: { cnpj: company?.cnpj, name: company?.name },
+      period: this.yyyymm(year, month),
+      company: { cnpj: company.cnpj, name: company.name },
       blocks: {
-        block0: { records: 1, description: 'Abertura e identificação' },
-        blockA: { records: payableTaxes.length, description: 'Documentos fiscais de serviços' },
-        blockF: { records: (invoices as unknown[])?.length || 0, description: 'Demais documentos' },
+        block0: { records: 5, description: 'Abertura e identificação' },
+        blockA: { records: docs.length * 2 + 2, description: 'Documentos fiscais de serviços' },
         blockM: {
           pisApurado: pisTotal,
           cofinsApurado: cofinsTotal,
           description: 'Apuração PIS/COFINS',
         },
       },
+      docs,
       status: 'GENERATED',
       generatedAt: new Date(),
     };
   }
 
   /**
-   * Exporta arquivo SPED em formato texto fixo
+   * Exporta o arquivo SPED em texto fixo pipe-delimited.
    */
   async exportFile(companyId: string, year: number, month: number): Promise<string> {
+    const company = await this.prisma.company.findFirst({ where: { id: companyId } });
+    if (!company) throw new BadRequestException('Empresa não encontrada');
+
     const data = await this.generate(companyId, year, month);
+    const { startDate, endDate } = this.periodRange(year, month);
 
-    // Gera layout SPED (texto fixo, pipe-delimited)
-    const lines: string[] = [];
+    return new SpedBuilder({
+      cnpj: company.cnpj,
+      companyName: company.name,
+      startDate,
+      endDate,
+      state: 'SP',
+    })
+      .block0()
+      .blockA(data.docs)
+      .blockM({
+        pisTotal: data.blocks.blockM.pisApurado,
+        cofinsTotal: data.blocks.blockM.cofinsApurado,
+      })
+      .block1()
+      .block9()
+      .build();
+  }
 
-    // Registro 0000 - Abertura
-    lines.push(`|0000|015|0|${year}${String(month).padStart(2, '0')}01|${year}${String(month).padStart(2, '0')}${new Date(year, month, 0).getDate()}|${data.company.name}|${data.company.cnpj}||SP|||A|1|`);
+  private periodRange(year: number, month: number) {
+    return {
+      startDate: new Date(year, month - 1, 1),
+      endDate: new Date(year, month, 0, 23, 59, 59, 999),
+    };
+  }
 
-    // Registro 0001 - Abertura Bloco 0
-    lines.push('|0001|0|');
-
-    // Registro 9999 - Encerramento
-    lines.push(`|9999|${lines.length + 1}|`);
-
-    return lines.join('\r\n');
+  private yyyymm(year: number, month: number): string {
+    return `${year}-${String(month).padStart(2, '0')}`;
   }
 }

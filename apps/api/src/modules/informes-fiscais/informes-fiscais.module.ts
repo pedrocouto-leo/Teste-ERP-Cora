@@ -7,6 +7,8 @@ import { EcfController } from './ecf.controller';
 import { EcfService } from './ecf.service';
 import { DesIfController } from './des-if.controller';
 import { DesIfService } from './des-if.service';
+import { REINF_TRANSMITTER } from './transmitters/reinf-transmitter';
+import { StubReinfTransmitter } from './transmitters/stub-reinf-transmitter';
 
 @Module({
   controllers: [
@@ -20,6 +22,11 @@ import { DesIfService } from './des-if.service';
     EfdContribuicoesService,
     EcfService,
     DesIfService,
+    StubReinfTransmitter,
+    {
+      provide: REINF_TRANSMITTER,
+      useExisting: StubReinfTransmitter,
+    },
   ],
   exports: [EfdReinfService],
 })

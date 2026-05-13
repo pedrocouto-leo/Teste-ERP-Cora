@@ -87,7 +87,7 @@ export class BacenReportService {
   /**
    * Resolução 3919 Art. 19 - Tarifas e Encargos
    */
-  async generateTarifasEncargos(companyId: string) {
+  async generateTarifasEncargos(_companyId: string) {
     return {
       documento: 'RES_3919_ART19',
       descricao: 'Tabela de Tarifas e Encargos - Resolução 3919',

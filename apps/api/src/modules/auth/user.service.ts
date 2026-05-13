@@ -163,7 +163,7 @@ export class UserService {
   }
 
   private sanitizeUser(user: Record<string, unknown>) {
-    const { passwordHash, passwordHistory, ...rest } = user as Record<string, unknown>;
+    const { passwordHash: _passwordHash, passwordHistory: _passwordHistory, ...rest } = user as Record<string, unknown>;
     return rest;
   }
 }
