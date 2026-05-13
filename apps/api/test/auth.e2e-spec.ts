@@ -48,9 +48,11 @@ describe('Auth (E2E)', () => {
 
   it('rejects login with invalid credentials', async () => {
     if (!hasDb()) return;
+    // Password must satisfy LoginDto MinLength(8) so the request reaches
+    // AuthService (otherwise ValidationPipe responds 400, not 401).
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: 'admin@cora.test', password: 'wrong' });
+      .send({ email: 'admin@cora.test', password: 'WrongPass!12345' });
     expect(res.status).toBe(401);
   });
 
