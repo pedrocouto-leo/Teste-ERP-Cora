@@ -60,7 +60,8 @@ describe('Auth (E2E)', () => {
       .post('/api/v1/auth/login')
       .send({ email: 'admin@cora.test', password: baseline.password });
 
-    expect(res.status).toBe(201);
+    // POST /auth/login is annotated @HttpCode(HttpStatus.OK)
+    expect(res.status).toBe(200);
     expect(res.body.data).toHaveProperty('accessToken');
     expect(res.body.data).toHaveProperty('refreshToken');
     expect(res.body.data.user.email).toBe('admin@cora.test');

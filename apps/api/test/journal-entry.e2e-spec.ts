@@ -147,7 +147,10 @@ describe('JournalEntry (E2E)', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(list.status).toBe(200);
-    const ids = list.body.data.data.map((e: { id: string }) => e.id);
+    // Service.findAll already returns { data, meta }; TransformInterceptor
+    // detects the inner `data` key and passes it through. So the array
+    // lives at body.data (not body.data.data).
+    const ids = (list.body.data as Array<{ id: string }>).map((e) => e.id);
     expect(ids).toContain(entryId);
   });
 
