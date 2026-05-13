@@ -44,9 +44,13 @@ export class AccountingPeriodService {
     });
   }
 
-  async findAll(companyId: string, year?: number) {
+  async findAll(
+    companyId: string,
+    filters: { year?: number; status?: string } = {},
+  ) {
     const where: Record<string, unknown> = { companyId };
-    if (year) where.year = year;
+    if (filters.year) where.year = filters.year;
+    if (filters.status) where.status = filters.status;
 
     return this.prisma.accountingPeriod.findMany({
       where,

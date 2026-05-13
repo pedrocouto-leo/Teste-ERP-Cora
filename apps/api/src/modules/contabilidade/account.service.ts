@@ -4,10 +4,12 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
-interface AccountNode {
+export interface AccountNode {
   id: string;
   code: string;
   name: string;
@@ -20,82 +22,92 @@ interface AccountNode {
 export class AccountService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateAccountDto) {
-    // Validate chart exists
-    const chart = await this.prisma.chartOfAccounts.findUnique({
-      where: { id: dto.chartId },
+  private async assertChartOwnedByCompany(companyId: string, chartId: string) {
+    const chart = await this.prisma.chartOfAccounts.findFirst({
+      where: { id: chartId, companyId },
     });
     if (!chart) {
-      throw new NotFoundException('Plano de contas nao encontrado');
+      throw new NotFoundException('Plano de contas não encontrado');
     }
+    return chart;
+  }
 
-    // Validate code uniqueness within chart
+  async create(companyId: string, dto: CreateAccountDto) {
+    await this.assertChartOwnedByCompany(companyId, dto.chartId);
+
     const existing = await this.prisma.account.findFirst({
       where: { chartId: dto.chartId, code: dto.code },
     });
     if (existing) {
-      throw new ConflictException('Conta com este codigo ja existe neste plano');
+      throw new ConflictException('Conta com este código já existe neste plano');
     }
 
-    // Validate parent relationship
     if (dto.parentId) {
       const parent = await this.prisma.account.findFirst({
         where: { id: dto.parentId, chartId: dto.chartId },
       });
       if (!parent) {
-        throw new NotFoundException('Conta pai nao encontrada neste plano');
+        throw new NotFoundException('Conta pai não encontrada neste plano');
       }
-      // Level must be parent level + 1
       if (dto.level !== parent.level + 1) {
         throw new BadRequestException(
-          `Nivel deve ser ${parent.level + 1} (pai esta no nivel ${parent.level})`,
+          `Nível deve ser ${parent.level + 1} (pai está no nível ${parent.level})`,
         );
       }
-    } else {
-      // Root account must be level 1
-      if (dto.level !== 1) {
-        throw new BadRequestException(
-          'Conta raiz deve ter nivel 1',
-        );
-      }
+    } else if (dto.level !== 1) {
+      throw new BadRequestException('Conta raiz deve ter nível 1');
     }
 
-    // Only leaf accounts can have allowsPosting = true
-    if (dto.allowsPosting) {
-      const hasChildren = await this.prisma.account.findFirst({
-        where: { parentId: dto.parentId, chartId: dto.chartId },
-      });
-      // This is a new account, so it's a leaf by definition - just validate intent
-    }
-
-    return this.prisma.account.create({
-      data: dto,
-    });
+    return this.prisma.account.create({ data: dto });
   }
 
   async findAll(
-    chartId?: string,
-    filters?: {
+    companyId: string,
+    pagination: PaginationDto,
+    filters: {
+      chartId?: string;
       type?: string;
       level?: number;
       cosifCode?: string;
-      active?: boolean;
-    },
+      search?: string;
+    } = {},
   ) {
-    const where: Record<string, unknown> = {};
-    if (chartId) where.chartId = chartId;
-    if (filters?.type) where.type = filters.type;
-    if (filters?.level) where.level = filters.level;
-    if (filters?.cosifCode) where.cosifCode = { contains: filters.cosifCode };
-    if (filters?.active !== undefined) where.active = filters.active;
+    const { page = 1, limit = 50, sortBy = 'code', sortOrder = 'asc' } = pagination;
+    const skip = (page - 1) * limit;
 
-    return this.prisma.account.findMany({
-      where,
-      orderBy: { code: 'asc' },
-    });
+    const where: Prisma.AccountWhereInput = {
+      chart: { companyId },
+    };
+    if (filters.chartId) where.chartId = filters.chartId;
+    if (filters.type) where.type = filters.type;
+    if (filters.level !== undefined) where.level = filters.level;
+    if (filters.cosifCode) where.cosifCode = { contains: filters.cosifCode };
+    if (filters.search) {
+      where.OR = [
+        { code: { contains: filters.search } },
+        { name: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.account.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      this.prisma.account.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
-  async findTree(chartId: string) {
+  async findTree(companyId: string, chartId: string) {
+    await this.assertChartOwnedByCompany(companyId, chartId);
+
     const accounts = await this.prisma.account.findMany({
       where: { chartId },
       orderBy: { code: 'asc' },
@@ -104,9 +116,9 @@ export class AccountService {
     return this.buildTree(accounts);
   }
 
-  async findOne(id: string) {
-    const account = await this.prisma.account.findUnique({
-      where: { id },
+  async findOne(companyId: string, id: string) {
+    const account = await this.prisma.account.findFirst({
+      where: { id, chart: { companyId } },
       include: {
         parent: true,
         children: { orderBy: { code: 'asc' } },
@@ -114,72 +126,54 @@ export class AccountService {
     });
 
     if (!account) {
-      throw new NotFoundException('Conta contabil nao encontrada');
+      throw new NotFoundException('Conta contábil não encontrada');
     }
 
     return account;
   }
 
-  async update(id: string, dto: UpdateAccountDto) {
-    const account = await this.prisma.account.findUnique({
-      where: { id },
-    });
+  async update(companyId: string, id: string, dto: UpdateAccountDto) {
+    const account = await this.findOne(companyId, id);
 
-    if (!account) {
-      throw new NotFoundException('Conta contabil nao encontrada');
-    }
-
-    // If enabling allowsPosting, ensure no children exist
     if (dto.allowsPosting === true) {
       const childCount = await this.prisma.account.count({
         where: { parentId: id },
       });
       if (childCount > 0) {
         throw new BadRequestException(
-          'Conta com filhos nao pode permitir lancamento direto',
+          'Conta com filhos não pode permitir lançamento direto',
         );
       }
     }
 
     return this.prisma.account.update({
-      where: { id },
+      where: { id: account.id },
       data: dto,
     });
   }
 
-  async remove(id: string) {
-    const account = await this.prisma.account.findUnique({
-      where: { id },
-    });
-
-    if (!account) {
-      throw new NotFoundException('Conta contabil nao encontrada');
-    }
+  async delete(companyId: string, id: string) {
+    const account = await this.findOne(companyId, id);
 
     const children = await this.prisma.account.count({
       where: { parentId: id },
     });
-
     if (children > 0) {
       throw new ConflictException(
-        'Nao e possivel excluir conta com subcontas vinculadas',
+        'Não é possível excluir conta com subcontas vinculadas',
       );
     }
 
-    // Check if account has any journal entry lines
     const lineCount = await this.prisma.journalEntryLine.count({
       where: { accountId: id },
     });
-
     if (lineCount > 0) {
       throw new ConflictException(
-        'Nao e possivel excluir conta com lancamentos vinculados',
+        'Não é possível excluir conta com lançamentos vinculados',
       );
     }
 
-    return this.prisma.account.delete({
-      where: { id },
-    });
+    return this.prisma.account.delete({ where: { id: account.id } });
   }
 
   private buildTree(

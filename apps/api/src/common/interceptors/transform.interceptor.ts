@@ -16,23 +16,23 @@ export interface ApiResponse<T> {
 export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T>> {
   intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponse<T>> {
     const request = context.switchToHttp().getRequest<Request>();
-    const correlationId = (request as Record<string, unknown>).correlationId as string;
+    const correlationId = (request as unknown as Record<string, unknown>).correlationId as string;
 
     return next.handle().pipe(
-      map((responseData) => {
-        // If already formatted with data/meta, pass through
+      map((responseData: unknown) => {
         if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+          const r = responseData as { data: T; meta?: Record<string, unknown> };
           return {
-            ...responseData,
+            ...r,
             meta: {
-              ...responseData.meta,
+              ...(r.meta ?? {}),
               requestId: correlationId,
             },
-          };
+          } as ApiResponse<T>;
         }
 
         return {
-          data: responseData,
+          data: responseData as T,
           meta: {
             requestId: correlationId,
           },

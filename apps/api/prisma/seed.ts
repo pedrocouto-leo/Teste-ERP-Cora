@@ -76,13 +76,14 @@ async function main() {
       userId_roleId_branchId: {
         userId: adminUser.id,
         roleId: adminRole.id,
-        branchId: null as unknown as string,
+        branchId: branch.id,
       },
     },
     update: {},
     create: {
       userId: adminUser.id,
       roleId: adminRole.id,
+      branchId: branch.id,
     },
   });
 
@@ -226,6 +227,326 @@ async function main() {
 
   console.log(`${indexers.length} indexers seeded`);
 
+  // ============================================================
+  // DDR - Documento 2011 (Dados Fictícios)
+  // ============================================================
+
+  console.log('Seeding DDR data...');
+
+  // DDR Report 1 - DRAFT (hoje)
+  const ddrDraft = await prisma.ddrReport.upsert({
+    where: { companyId_referenceDate: { companyId: company.id, referenceDate: new Date('2026-03-23') } },
+    update: {},
+    create: {
+      companyId: company.id,
+      referenceDate: new Date('2026-03-23'),
+      status: 'DRAFT',
+      notes: 'Relatório diário em elaboração',
+      createdBy: adminUser.id,
+    },
+  });
+
+  // DDR Report 2 - APPROVED (ontem)
+  const ddrApproved = await prisma.ddrReport.upsert({
+    where: { companyId_referenceDate: { companyId: company.id, referenceDate: new Date('2026-03-20') } },
+    update: {},
+    create: {
+      companyId: company.id,
+      referenceDate: new Date('2026-03-20'),
+      status: 'APPROVED',
+      notes: 'Revisado e aprovado pela diretoria',
+      createdBy: adminUser.id,
+      reviewedBy: adminUser.id,
+      reviewedAt: new Date('2026-03-21T10:00:00Z'),
+      approvedBy: adminUser.id,
+      approvedAt: new Date('2026-03-21T14:00:00Z'),
+    },
+  });
+
+  // DDR Report 3 - SUBMITTED (semana passada)
+  const ddrSubmitted = await prisma.ddrReport.upsert({
+    where: { companyId_referenceDate: { companyId: company.id, referenceDate: new Date('2026-03-19') } },
+    update: {},
+    create: {
+      companyId: company.id,
+      referenceDate: new Date('2026-03-19'),
+      status: 'SUBMITTED',
+      notes: 'Enviado ao BCB via Sisbacen',
+      createdBy: adminUser.id,
+      reviewedBy: adminUser.id,
+      reviewedAt: new Date('2026-03-20T09:00:00Z'),
+      approvedBy: adminUser.id,
+      approvedAt: new Date('2026-03-20T11:00:00Z'),
+      submittedAt: new Date('2026-03-20T15:00:00Z'),
+      protocolNumber: 'DDR-2026-0319-001',
+    },
+  });
+
+  // DDR Report 4 - PENDING_REVIEW
+  const ddrPending = await prisma.ddrReport.upsert({
+    where: { companyId_referenceDate: { companyId: company.id, referenceDate: new Date('2026-03-18') } },
+    update: {},
+    create: {
+      companyId: company.id,
+      referenceDate: new Date('2026-03-18'),
+      status: 'PENDING_REVIEW',
+      createdBy: adminUser.id,
+    },
+  });
+
+  // DDR Report 5 - REJECTED
+  const ddrRejected = await prisma.ddrReport.upsert({
+    where: { companyId_referenceDate: { companyId: company.id, referenceDate: new Date('2026-03-17') } },
+    update: {},
+    create: {
+      companyId: company.id,
+      referenceDate: new Date('2026-03-17'),
+      status: 'REJECTED',
+      notes: 'Valores de posição USD inconsistentes com tesouraria',
+      createdBy: adminUser.id,
+    },
+  });
+
+  console.log('5 DDR reports created');
+
+  // ---- Entries for DRAFT report (today) ----
+  const draftEntries = [
+    // FX Positions (Posições Cambiais) - Grupo 11/12/13/14/15
+    { accountCode: '111000', currencyCode: '220', countryCode: null, positionType: 1, value: 15000000.00, isCalculated: false },
+    { accountCode: '111000', currencyCode: '220', countryCode: null, positionType: 2, value: 8500000.00, isCalculated: false },
+    { accountCode: '111000', currencyCode: '978', countryCode: null, positionType: 1, value: 3200000.00, isCalculated: false },
+    { accountCode: '111000', currencyCode: '826', countryCode: null, positionType: 1, value: 1800000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '220', countryCode: null, positionType: 1, value: 12000000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '220', countryCode: null, positionType: 2, value: 7200000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '978', countryCode: null, positionType: 1, value: 2800000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '826', countryCode: null, positionType: 1, value: 1500000.00, isCalculated: false },
+    { accountCode: '131000', currencyCode: '220', countryCode: null, positionType: 1, value: 500000.00, isCalculated: false },
+    { accountCode: '132000', currencyCode: '220', countryCode: null, positionType: 1, value: 300000.00, isCalculated: false },
+
+    // Liquidity (Liquidez) - Grupo 21/22/23/24
+    { accountCode: '211000', currencyCode: null, countryCode: null, positionType: null, value: 45000000.00, isCalculated: false },
+    { accountCode: '212000', currencyCode: null, countryCode: null, positionType: null, value: 38000000.00, isCalculated: false },
+    { accountCode: '221000', currencyCode: null, countryCode: null, positionType: null, value: 52000000.00, isCalculated: false },
+    { accountCode: '231000', currencyCode: null, countryCode: null, positionType: null, value: 120000000.00, isCalculated: false },
+
+    // RWACAM inputs - Grupo 31
+    { accountCode: '310101', currencyCode: null, countryCode: null, positionType: null, value: 4200000.00, isCalculated: false },
+    { accountCode: '310102', currencyCode: null, countryCode: null, positionType: null, value: 700000.00, isCalculated: false },
+    { accountCode: '310103', currencyCode: null, countryCode: null, positionType: null, value: 150000.00, isCalculated: false },
+    { accountCode: '310104', currencyCode: null, countryCode: null, positionType: null, value: 85000.00, isCalculated: false },
+
+    // Market Risk inputs - Grupo 41
+    { accountCode: '410101', currencyCode: null, countryCode: null, positionType: null, value: 180000000.00, isCalculated: false },
+    { accountCode: '410201', currencyCode: null, countryCode: null, positionType: null, value: 2100000.00, isCalculated: false },
+    { accountCode: '410202', currencyCode: null, countryCode: null, positionType: null, value: 890000.00, isCalculated: false },
+    { accountCode: '410301', currencyCode: null, countryCode: null, positionType: null, value: 1.15, isCalculated: false },
+    { accountCode: '410302', currencyCode: null, countryCode: null, positionType: null, value: 1.08, isCalculated: false },
+    { accountCode: '410501', currencyCode: null, countryCode: null, positionType: null, value: 1500000.00, isCalculated: false },
+    { accountCode: '410502', currencyCode: null, countryCode: null, positionType: null, value: 980000.00, isCalculated: false },
+    { accountCode: '410503', currencyCode: null, countryCode: null, positionType: null, value: 450000.00, isCalculated: false },
+    { accountCode: '410504', currencyCode: null, countryCode: null, positionType: null, value: 320000.00, isCalculated: false },
+    { accountCode: '410601', currencyCode: null, countryCode: null, positionType: null, value: 750000.00, isCalculated: false },
+    { accountCode: '410602', currencyCode: null, countryCode: null, positionType: null, value: 420000.00, isCalculated: false },
+    { accountCode: '410603', currencyCode: null, countryCode: null, positionType: null, value: 180000.00, isCalculated: false },
+    { accountCode: '410604', currencyCode: null, countryCode: null, positionType: null, value: 95000.00, isCalculated: false },
+    { accountCode: '410701', currencyCode: null, countryCode: null, positionType: null, value: 320000.00, isCalculated: false },
+    { accountCode: '410702', currencyCode: null, countryCode: null, positionType: null, value: 150000.00, isCalculated: false },
+    { accountCode: '410703', currencyCode: null, countryCode: null, positionType: null, value: 85000.00, isCalculated: false },
+    { accountCode: '410704', currencyCode: null, countryCode: null, positionType: null, value: 42000.00, isCalculated: false },
+    { accountCode: '410801', currencyCode: null, countryCode: null, positionType: null, value: 200000.00, isCalculated: false },
+    { accountCode: '410802', currencyCode: null, countryCode: null, positionType: null, value: 110000.00, isCalculated: false },
+    { accountCode: '410901', currencyCode: null, countryCode: null, positionType: null, value: 180000.00, isCalculated: false },
+    { accountCode: '410904', currencyCode: null, countryCode: null, positionType: null, value: 95000.00, isCalculated: false },
+    { accountCode: '410907', currencyCode: null, countryCode: null, positionType: null, value: 45000.00, isCalculated: false },
+    { accountCode: '410908', currencyCode: null, countryCode: null, positionType: null, value: 32000.00, isCalculated: false },
+
+    // Internal Models - Grupo 50/51
+    { accountCode: '501000', currencyCode: null, countryCode: null, positionType: null, value: 0.00, isCalculated: false },
+    { accountCode: '502000', currencyCode: null, countryCode: null, positionType: null, value: 0.00, isCalculated: false },
+  ];
+
+  for (const entry of draftEntries) {
+    await prisma.ddrEntry.upsert({
+      where: {
+        reportId_accountCode_currencyCode_countryCode_positionType: {
+          reportId: ddrDraft.id,
+          accountCode: entry.accountCode,
+          currencyCode: entry.currencyCode ?? '',
+          countryCode: entry.countryCode ?? '',
+          positionType: entry.positionType ?? 0,
+        },
+      },
+      update: { value: entry.value },
+      create: {
+        reportId: ddrDraft.id,
+        accountCode: entry.accountCode,
+        currencyCode: entry.currencyCode,
+        countryCode: entry.countryCode,
+        positionType: entry.positionType,
+        value: entry.value,
+        isCalculated: entry.isCalculated,
+      },
+    });
+  }
+
+  console.log(`${draftEntries.length} entries added to DRAFT DDR`);
+
+  // ---- Entries for APPROVED report (with calculated values) ----
+  const approvedEntries = [
+    // FX Positions
+    { accountCode: '111000', currencyCode: '220', countryCode: null, positionType: 1, value: 14500000.00, isCalculated: false },
+    { accountCode: '111000', currencyCode: '220', countryCode: null, positionType: 2, value: 8000000.00, isCalculated: false },
+    { accountCode: '111000', currencyCode: '978', countryCode: null, positionType: 1, value: 3000000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '220', countryCode: null, positionType: 1, value: 11500000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '220', countryCode: null, positionType: 2, value: 7000000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '978', countryCode: null, positionType: 1, value: 2700000.00, isCalculated: false },
+    { accountCode: '131000', currencyCode: '220', countryCode: null, positionType: 1, value: 400000.00, isCalculated: false },
+    { accountCode: '132000', currencyCode: '220', countryCode: null, positionType: 1, value: 250000.00, isCalculated: false },
+    // Calculated net positions
+    { accountCode: '141000', currencyCode: '220', countryCode: null, positionType: 1, value: 3150000.00, isCalculated: true },
+    { accountCode: '141000', currencyCode: '978', countryCode: null, positionType: 1, value: 300000.00, isCalculated: true },
+    // RWACAM calculated
+    { accountCode: '310101', currencyCode: null, countryCode: null, positionType: null, value: 3850000.00, isCalculated: false },
+    { accountCode: '310102', currencyCode: null, countryCode: null, positionType: null, value: 650000.00, isCalculated: false },
+    { accountCode: '310103', currencyCode: null, countryCode: null, positionType: null, value: 120000.00, isCalculated: false },
+    { accountCode: '310104', currencyCode: null, countryCode: null, positionType: null, value: 75000.00, isCalculated: false },
+    { accountCode: '310100', currencyCode: null, countryCode: null, positionType: null, value: 4695000.00, isCalculated: true },
+    { accountCode: '310105', currencyCode: null, countryCode: null, positionType: null, value: 28.50, isCalculated: true },
+    { accountCode: '310000', currencyCode: null, countryCode: null, positionType: null, value: 1338075.00, isCalculated: true },
+    // Market Risk
+    { accountCode: '410101', currencyCode: null, countryCode: null, positionType: null, value: 175000000.00, isCalculated: false },
+    { accountCode: '410201', currencyCode: null, countryCode: null, positionType: null, value: 2000000.00, isCalculated: false },
+    { accountCode: '410202', currencyCode: null, countryCode: null, positionType: null, value: 850000.00, isCalculated: false },
+    { accountCode: '410200', currencyCode: null, countryCode: null, positionType: null, value: 2850000.00, isCalculated: true },
+    { accountCode: '410301', currencyCode: null, countryCode: null, positionType: null, value: 1.12, isCalculated: false },
+    { accountCode: '410302', currencyCode: null, countryCode: null, positionType: null, value: 1.05, isCalculated: false },
+    { accountCode: '410300', currencyCode: null, countryCode: null, positionType: null, value: 2.17, isCalculated: true },
+    { accountCode: '410401', currencyCode: null, countryCode: null, positionType: null, value: 2000000.00, isCalculated: true },
+    { accountCode: '410402', currencyCode: null, countryCode: null, positionType: null, value: 850000.00, isCalculated: true },
+    { accountCode: '410400', currencyCode: null, countryCode: null, positionType: null, value: 2850000.00, isCalculated: true },
+    { accountCode: '410501', currencyCode: null, countryCode: null, positionType: null, value: 1400000.00, isCalculated: false },
+    { accountCode: '410502', currencyCode: null, countryCode: null, positionType: null, value: 920000.00, isCalculated: false },
+    { accountCode: '410503', currencyCode: null, countryCode: null, positionType: null, value: 410000.00, isCalculated: false },
+    { accountCode: '410504', currencyCode: null, countryCode: null, positionType: null, value: 300000.00, isCalculated: false },
+    { accountCode: '410500', currencyCode: null, countryCode: null, positionType: null, value: 3030000.00, isCalculated: true },
+    { accountCode: '410601', currencyCode: null, countryCode: null, positionType: null, value: 700000.00, isCalculated: false },
+    { accountCode: '410602', currencyCode: null, countryCode: null, positionType: null, value: 380000.00, isCalculated: false },
+    { accountCode: '410603', currencyCode: null, countryCode: null, positionType: null, value: 160000.00, isCalculated: false },
+    { accountCode: '410604', currencyCode: null, countryCode: null, positionType: null, value: 85000.00, isCalculated: false },
+    { accountCode: '410600', currencyCode: null, countryCode: null, positionType: null, value: 1325000.00, isCalculated: true },
+    { accountCode: '410701', currencyCode: null, countryCode: null, positionType: null, value: 290000.00, isCalculated: false },
+    { accountCode: '410702', currencyCode: null, countryCode: null, positionType: null, value: 130000.00, isCalculated: false },
+    { accountCode: '410703', currencyCode: null, countryCode: null, positionType: null, value: 75000.00, isCalculated: false },
+    { accountCode: '410704', currencyCode: null, countryCode: null, positionType: null, value: 38000.00, isCalculated: false },
+    { accountCode: '410700', currencyCode: null, countryCode: null, positionType: null, value: 533000.00, isCalculated: true },
+    { accountCode: '410801', currencyCode: null, countryCode: null, positionType: null, value: 185000.00, isCalculated: false },
+    { accountCode: '410802', currencyCode: null, countryCode: null, positionType: null, value: 100000.00, isCalculated: false },
+    { accountCode: '410800', currencyCode: null, countryCode: null, positionType: null, value: 285000.00, isCalculated: true },
+    { accountCode: '410901', currencyCode: null, countryCode: null, positionType: null, value: 165000.00, isCalculated: false },
+    { accountCode: '410904', currencyCode: null, countryCode: null, positionType: null, value: 88000.00, isCalculated: false },
+    { accountCode: '410907', currencyCode: null, countryCode: null, positionType: null, value: 40000.00, isCalculated: false },
+    { accountCode: '410908', currencyCode: null, countryCode: null, positionType: null, value: 28000.00, isCalculated: false },
+    { accountCode: '410900', currencyCode: null, countryCode: null, positionType: null, value: 321000.00, isCalculated: true },
+    // RWAMPAD total
+    { accountCode: '503000', currencyCode: null, countryCode: null, positionType: null, value: 9682075.00, isCalculated: true },
+  ];
+
+  for (const entry of approvedEntries) {
+    await prisma.ddrEntry.upsert({
+      where: {
+        reportId_accountCode_currencyCode_countryCode_positionType: {
+          reportId: ddrApproved.id,
+          accountCode: entry.accountCode,
+          currencyCode: entry.currencyCode ?? '',
+          countryCode: entry.countryCode ?? '',
+          positionType: entry.positionType ?? 0,
+        },
+      },
+      update: { value: entry.value },
+      create: {
+        reportId: ddrApproved.id,
+        accountCode: entry.accountCode,
+        currencyCode: entry.currencyCode,
+        countryCode: entry.countryCode,
+        positionType: entry.positionType,
+        value: entry.value,
+        isCalculated: entry.isCalculated,
+      },
+    });
+  }
+
+  console.log(`${approvedEntries.length} entries added to APPROVED DDR`);
+
+  // ---- Add a few entries to other reports too ----
+  const basicEntries = [
+    { accountCode: '111000', currencyCode: '220', countryCode: null, positionType: 1, value: 13000000.00, isCalculated: false },
+    { accountCode: '121000', currencyCode: '220', countryCode: null, positionType: 1, value: 10500000.00, isCalculated: false },
+    { accountCode: '310000', currencyCode: null, countryCode: null, positionType: null, value: 1250000.00, isCalculated: true },
+    { accountCode: '503000', currencyCode: null, countryCode: null, positionType: null, value: 9200000.00, isCalculated: true },
+  ];
+
+  for (const reportId of [ddrSubmitted.id, ddrPending.id, ddrRejected.id]) {
+    for (const entry of basicEntries) {
+      await prisma.ddrEntry.upsert({
+        where: {
+          reportId_accountCode_currencyCode_countryCode_positionType: {
+            reportId,
+            accountCode: entry.accountCode,
+            currencyCode: entry.currencyCode ?? '',
+            countryCode: entry.countryCode ?? '',
+            positionType: entry.positionType ?? 0,
+          },
+        },
+        update: { value: entry.value },
+        create: {
+          reportId,
+          accountCode: entry.accountCode,
+          currencyCode: entry.currencyCode,
+          countryCode: entry.countryCode,
+          positionType: entry.positionType,
+          value: entry.value,
+          isCalculated: entry.isCalculated,
+        },
+      });
+    }
+  }
+
+  console.log('Basic entries added to SUBMITTED, PENDING_REVIEW, and REJECTED DDRs');
+
+  // ---- DDR Parameters for the DRAFT report ----
+  const ddrParameters = [
+    { parameterCode: 'FACTOR_F', value: 0.285, source: 'CALCULATED' },
+    { parameterCode: 'FACTOR_H', value: 0.70, source: 'BCB' },
+    { parameterCode: 'FACTOR_G', value: 0.40, source: 'BCB' },
+    { parameterCode: 'MPRE', value: 0.015, source: 'BCB' },
+    { parameterCode: 'MEXT', value: 0.025, source: 'BCB' },
+    { parameterCode: 'MPCO', value: 0.020, source: 'BCB' },
+    { parameterCode: 'MJUR_PREFIXADO', value: 0.012, source: 'BCB' },
+    { parameterCode: 'MJUR_CUPOM_CAMBIAL', value: 0.018, source: 'BCB' },
+    { parameterCode: 'MJUR_INDICE_PRECOS', value: 0.010, source: 'BCB' },
+    { parameterCode: 'MJUR_TAXA_JUROS', value: 0.008, source: 'BCB' },
+    { parameterCode: 'EXP_PR_RATIO', value: 0.05, source: 'CALCULATED' },
+  ];
+
+  for (const param of ddrParameters) {
+    await prisma.ddrParameter.upsert({
+      where: {
+        reportId_parameterCode: {
+          reportId: ddrDraft.id,
+          parameterCode: param.parameterCode,
+        },
+      },
+      update: { value: param.value },
+      create: {
+        reportId: ddrDraft.id,
+        ...param,
+      },
+    });
+  }
+
+  console.log(`${ddrParameters.length} DDR parameters seeded`);
+
+  console.log('DDR seed completed!');
   console.log('Seed completed successfully!');
 }
 

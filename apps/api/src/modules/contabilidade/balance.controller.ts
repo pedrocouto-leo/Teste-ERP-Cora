@@ -24,7 +24,7 @@ export class BalanceController {
     @TenantId() companyId: string,
     @Query('periodId') periodId: string,
   ) {
-    const result = await this.service.trialBalance(companyId, periodId);
+    const result = await this.service.getTrialBalance(companyId, periodId);
     return { data: result };
   }
 
@@ -34,7 +34,7 @@ export class BalanceController {
     @TenantId() companyId: string,
     @Query('periodId') periodId: string,
   ) {
-    const result = await this.service.balanceSheet(companyId, periodId);
+    const result = await this.service.getBalanceSheet(companyId, periodId);
     return { data: result };
   }
 
@@ -44,7 +44,7 @@ export class BalanceController {
     @TenantId() companyId: string,
     @Query('periodId') periodId: string,
   ) {
-    const result = await this.service.incomeStatement(companyId, periodId);
+    const result = await this.service.getIncomeStatement(companyId, periodId);
     return { data: result };
   }
 }

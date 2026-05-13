@@ -9,7 +9,7 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const { method, url } = request;
-    const correlationId = (request as Record<string, unknown>).correlationId;
+    const correlationId = (request as unknown as Record<string, unknown>).correlationId;
     const now = Date.now();
 
     return next.handle().pipe(

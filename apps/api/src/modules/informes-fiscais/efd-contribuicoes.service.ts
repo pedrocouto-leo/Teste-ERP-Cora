@@ -42,7 +42,7 @@ export class EfdContribuicoesService {
     for (const p of payables) {
       const taxes = await this.prisma.payableTax.findMany({
         where: {
-          payableId: p.id,
+          titleId: p.id,
           taxType: { in: ['PIS', 'COFINS'] },
         },
       });

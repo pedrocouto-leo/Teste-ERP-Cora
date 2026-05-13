@@ -10,7 +10,7 @@ export class CorrelationIdInterceptor implements NestInterceptor {
     const correlationId =
       (request.headers['x-correlation-id'] as string) || uuidv4();
 
-    (request as Record<string, unknown>).correlationId = correlationId;
+    (request as unknown as Record<string, unknown>).correlationId = correlationId;
 
     const response = context.switchToHttp().getResponse();
     response.setHeader('x-correlation-id', correlationId);

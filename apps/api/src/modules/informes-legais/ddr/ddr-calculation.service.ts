@@ -142,9 +142,9 @@ export class DdrCalculationService {
         reportId_accountCode_currencyCode_countryCode_positionType: {
           reportId,
           accountCode,
-          currencyCode,
-          countryCode,
-          positionType,
+          currencyCode: currencyCode ?? '',
+          countryCode: countryCode ?? '',
+          positionType: positionType ?? 0,
         },
       },
       create: {

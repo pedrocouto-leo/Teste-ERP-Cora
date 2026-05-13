@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-interface ReinfEvent {
+export interface ReinfEvent {
   id: string;
   type: string;
   period: string;
@@ -52,14 +52,14 @@ export class EfdReinfService {
       where: {
         companyId,
         status: 'PAID',
-        paymentDate: { gte: startDate, lte: endDate },
+        updatedAt: { gte: startDate, lte: endDate },
       },
     });
 
     const events: ReinfEvent[] = [];
     for (const payable of payables) {
       const taxes = await this.prisma.payableTax.findMany({
-        where: { payableId: payable.id, taxType: 'IR' },
+        where: { titleId: payable.id, taxType: 'IR' },
       });
 
       if (taxes.length > 0) {
@@ -87,7 +87,7 @@ export class EfdReinfService {
       where: {
         companyId,
         status: 'PAID',
-        paymentDate: { gte: startDate, lte: endDate },
+        updatedAt: { gte: startDate, lte: endDate },
       },
     });
 
@@ -95,7 +95,7 @@ export class EfdReinfService {
     for (const payable of payables) {
       const taxes = await this.prisma.payableTax.findMany({
         where: {
-          payableId: payable.id,
+          titleId: payable.id,
           taxType: { in: ['IR', 'CSLL', 'PIS', 'COFINS'] },
         },
       });

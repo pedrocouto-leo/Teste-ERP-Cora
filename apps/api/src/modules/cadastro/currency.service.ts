@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateCurrencyDto,
@@ -14,15 +15,15 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 export class CurrencyService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ─── Currencies ──────────────────────────────────────────
+  // ─── Currencies (global registry) ────────────────────────
 
   async create(
-    companyId: string,
+    _companyId: string,
     dto: CreateCurrencyDto,
-    createdBy: string,
+    _createdBy: string,
   ) {
     const existing = await this.prisma.currency.findFirst({
-      where: { companyId, code: dto.code },
+      where: { code: dto.code },
     });
 
     if (existing) {
@@ -30,15 +31,20 @@ export class CurrencyService {
     }
 
     return this.prisma.currency.create({
-      data: { companyId, ...dto, createdBy },
+      data: {
+        code: dto.code,
+        name: dto.name,
+        symbol: dto.symbol ?? dto.code,
+        decimals: dto.decimalPlaces ?? 2,
+      },
     });
   }
 
-  async findAll(companyId: string, pagination: PaginationDto) {
+  async findAll(_companyId: string, pagination: PaginationDto) {
     const { page = 1, limit = 20, sortBy = 'code', sortOrder = 'asc' } = pagination;
     const skip = (page - 1) * limit;
 
-    const where = { companyId };
+    const where: Prisma.CurrencyWhereInput = {};
 
     const [data, total] = await Promise.all([
       this.prisma.currency.findMany({
@@ -56,9 +62,9 @@ export class CurrencyService {
     };
   }
 
-  async findOne(companyId: string, id: string) {
+  async findOne(_companyId: string, id: string) {
     const currency = await this.prisma.currency.findFirst({
-      where: { id, companyId },
+      where: { id },
     });
 
     if (!currency) {
@@ -72,13 +78,13 @@ export class CurrencyService {
     companyId: string,
     id: string,
     dto: Partial<CreateCurrencyDto>,
-    updatedBy: string,
+    _updatedBy: string,
   ) {
     const currency = await this.findOne(companyId, id);
 
     if (dto.code && dto.code !== currency.code) {
       const existing = await this.prisma.currency.findFirst({
-        where: { companyId, code: dto.code, id: { not: id } },
+        where: { code: dto.code, id: { not: id } },
       });
       if (existing) {
         throw new ConflictException('Moeda com este código já cadastrada');
@@ -87,7 +93,12 @@ export class CurrencyService {
 
     return this.prisma.currency.update({
       where: { id: currency.id },
-      data: { ...dto, updatedBy },
+      data: {
+        ...(dto.code !== undefined && { code: dto.code }),
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.symbol !== undefined && { symbol: dto.symbol }),
+        ...(dto.decimalPlaces !== undefined && { decimals: dto.decimalPlaces }),
+      },
     });
   }
 
@@ -102,7 +113,7 @@ export class CurrencyService {
     companyId: string,
     currencyId: string,
     dto: CreateExchangeRateDto,
-    createdBy: string,
+    _createdBy: string,
   ) {
     await this.findOne(companyId, currencyId);
 
@@ -118,9 +129,8 @@ export class CurrencyService {
       data: {
         currencyId,
         date: new Date(dto.date),
-        rate: dto.rate,
-        sellRate: dto.sellRate,
-        createdBy,
+        buyRate: dto.rate,
+        sellRate: dto.sellRate ?? dto.rate,
       },
     });
   }
@@ -133,10 +143,10 @@ export class CurrencyService {
   ) {
     await this.findOne(companyId, currencyId);
 
-    const where: Record<string, unknown> = { currencyId };
+    const where: Prisma.ExchangeRateWhereInput = { currencyId };
 
     if (startDate || endDate) {
-      const dateFilter: Record<string, Date> = {};
+      const dateFilter: { gte?: Date; lte?: Date } = {};
       if (startDate) dateFilter.gte = new Date(startDate);
       if (endDate) dateFilter.lte = new Date(endDate);
       where.date = dateFilter;

@@ -129,9 +129,9 @@ export class DdrService {
         reportId_accountCode_currencyCode_countryCode_positionType: {
           reportId,
           accountCode: dto.accountCode,
-          currencyCode: dto.currencyCode ?? null,
-          countryCode: dto.countryCode ?? null,
-          positionType: dto.positionType ?? null,
+          currencyCode: dto.currencyCode ?? '',
+          countryCode: dto.countryCode ?? '',
+          positionType: dto.positionType ?? 0,
         },
       },
       create: {
@@ -164,9 +164,9 @@ export class DdrService {
           reportId_accountCode_currencyCode_countryCode_positionType: {
             reportId,
             accountCode: entry.accountCode,
-            currencyCode: entry.currencyCode ?? null,
-            countryCode: entry.countryCode ?? null,
-            positionType: entry.positionType ?? null,
+            currencyCode: entry.currencyCode ?? '',
+            countryCode: entry.countryCode ?? '',
+            positionType: entry.positionType ?? 0,
           },
         },
         create: {

@@ -34,7 +34,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       ...(typeof message === 'object' && message !== null && 'errors' in message
         ? { errors: (message as Record<string, unknown>).errors }
         : {}),
-      requestId: (request as Record<string, unknown>).correlationId || null,
+      requestId: (request as unknown as Record<string, unknown>).correlationId || null,
     };
 
     if (status >= 500) {

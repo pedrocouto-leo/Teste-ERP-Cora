@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-interface DepreciationResult {
+export interface DepreciationResult {
   assetId: string;
   assetNumber: string;
   description: string;

@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateBankDto,
@@ -15,15 +16,11 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 export class BankService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ─── Banks ───────────────────────────────────────────────
+  // ─── Banks (global registry — COMPE/ISPB) ───────────────
 
-  async createBank(
-    companyId: string,
-    dto: CreateBankDto,
-    createdBy: string,
-  ) {
+  async createBank(_companyId: string, dto: CreateBankDto, _createdBy: string) {
     const existing = await this.prisma.bank.findFirst({
-      where: { companyId, code: dto.code },
+      where: { compeCode: dto.code },
     });
 
     if (existing) {
@@ -31,18 +28,22 @@ export class BankService {
     }
 
     return this.prisma.bank.create({
-      data: { companyId, ...dto, createdBy },
+      data: {
+        compeCode: dto.code,
+        name: dto.name,
+        ispbCode: dto.ispb,
+      },
     });
   }
 
-  async findAllBanks(companyId: string, pagination: PaginationDto, search?: string) {
-    const { page = 1, limit = 20, sortBy = 'code', sortOrder = 'asc' } = pagination;
+  async findAllBanks(_companyId: string, pagination: PaginationDto, search?: string) {
+    const { page = 1, limit = 20, sortBy = 'compeCode', sortOrder = 'asc' } = pagination;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = { companyId };
+    const where: Prisma.BankWhereInput = {};
     if (search) {
       where.OR = [
-        { code: { contains: search } },
+        { compeCode: { contains: search } },
         { name: { contains: search, mode: 'insensitive' } },
       ];
     }
@@ -63,9 +64,9 @@ export class BankService {
     };
   }
 
-  async findOneBank(companyId: string, id: string) {
+  async findOneBank(_companyId: string, id: string) {
     const bank = await this.prisma.bank.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { agencies: true },
     });
 
@@ -80,13 +81,13 @@ export class BankService {
     companyId: string,
     id: string,
     dto: Partial<CreateBankDto>,
-    updatedBy: string,
+    _updatedBy: string,
   ) {
     const bank = await this.findOneBank(companyId, id);
 
-    if (dto.code && dto.code !== bank.code) {
+    if (dto.code && dto.code !== bank.compeCode) {
       const existing = await this.prisma.bank.findFirst({
-        where: { companyId, code: dto.code, id: { not: id } },
+        where: { compeCode: dto.code, id: { not: id } },
       });
       if (existing) {
         throw new ConflictException('Banco com este código já cadastrado');
@@ -95,7 +96,11 @@ export class BankService {
 
     return this.prisma.bank.update({
       where: { id: bank.id },
-      data: { ...dto, updatedBy },
+      data: {
+        ...(dto.code !== undefined && { compeCode: dto.code }),
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.ispb !== undefined && { ispbCode: dto.ispb }),
+      },
     });
   }
 
@@ -110,7 +115,7 @@ export class BankService {
     companyId: string,
     bankId: string,
     dto: CreateBankAgencyDto,
-    createdBy: string,
+    _createdBy: string,
   ) {
     await this.findOneBank(companyId, bankId);
 
@@ -123,7 +128,12 @@ export class BankService {
     }
 
     return this.prisma.bankAgency.create({
-      data: { bankId, ...dto, createdBy },
+      data: {
+        bankId,
+        code: dto.code,
+        digit: dto.digit,
+        name: dto.name,
+      },
     });
   }
 
@@ -155,13 +165,17 @@ export class BankService {
     bankId: string,
     agencyId: string,
     dto: Partial<CreateBankAgencyDto>,
-    updatedBy: string,
+    _updatedBy: string,
   ) {
     await this.findOneAgency(companyId, bankId, agencyId);
 
     return this.prisma.bankAgency.update({
       where: { id: agencyId },
-      data: { ...dto, updatedBy },
+      data: {
+        ...(dto.code !== undefined && { code: dto.code }),
+        ...(dto.digit !== undefined && { digit: dto.digit }),
+        ...(dto.name !== undefined && { name: dto.name }),
+      },
     });
   }
 
@@ -182,9 +196,8 @@ export class BankService {
     const existing = await this.prisma.ownBankAccount.findFirst({
       where: {
         companyId,
-        bankId: dto.bankId,
-        agencyId: dto.agencyId,
-        accountNumber: dto.accountNumber,
+        bankAgencyId: dto.agencyId,
+        accountNum: dto.accountNumber,
       },
     });
 
@@ -193,14 +206,24 @@ export class BankService {
     }
 
     return this.prisma.ownBankAccount.create({
-      data: { companyId, ...dto, createdBy },
+      data: {
+        companyId,
+        bankAgencyId: dto.agencyId,
+        accountNum: dto.accountNumber,
+        accountDigit: dto.digit,
+        accountType: dto.accountType,
+        description: dto.description,
+        active: dto.active,
+        createdBy,
+      },
+      include: { bankAgency: { include: { bank: true } } },
     });
   }
 
   async findAllOwnBankAccounts(companyId: string) {
     return this.prisma.ownBankAccount.findMany({
       where: { companyId },
-      include: { bank: true, agency: true },
+      include: { bankAgency: { include: { bank: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -208,7 +231,7 @@ export class BankService {
   async findOneOwnBankAccount(companyId: string, id: string) {
     const account = await this.prisma.ownBankAccount.findFirst({
       where: { id, companyId },
-      include: { bank: true, agency: true },
+      include: { bankAgency: { include: { bank: true } } },
     });
 
     if (!account) {
@@ -228,7 +251,15 @@ export class BankService {
 
     return this.prisma.ownBankAccount.update({
       where: { id: account.id },
-      data: { ...dto, updatedBy },
+      data: {
+        ...(dto.agencyId !== undefined && { bankAgencyId: dto.agencyId }),
+        ...(dto.accountNumber !== undefined && { accountNum: dto.accountNumber }),
+        ...(dto.digit !== undefined && { accountDigit: dto.digit }),
+        ...(dto.accountType !== undefined && { accountType: dto.accountType }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.active !== undefined && { active: dto.active }),
+        updatedBy,
+      },
     });
   }
 

@@ -9,7 +9,7 @@ import {
   UpdateCostCenterDto,
 } from './dto/cost-center.dto';
 
-interface CostCenterNode {
+export interface CostCenterNode {
   id: string;
   code: string;
   name: string;

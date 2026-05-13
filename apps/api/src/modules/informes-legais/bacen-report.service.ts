@@ -38,7 +38,7 @@ export class BacenReportService {
       where: {
         companyId,
         status: 'PAID',
-        paymentDate: {
+        updatedAt: {
           gte: new Date(year, 0, 1),
           lte: new Date(year, 11, 31),
         },
@@ -48,7 +48,7 @@ export class BacenReportService {
     const informes = [];
     for (const payable of payables) {
       const taxes = await this.prisma.payableTax.findMany({
-        where: { payableId: payable.id, taxType: 'IR' },
+        where: { titleId: payable.id, taxType: 'IR' },
       });
 
       if (taxes.length > 0) {

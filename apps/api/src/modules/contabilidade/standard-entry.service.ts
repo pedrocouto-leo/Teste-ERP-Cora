@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateStandardEntryDto,
@@ -41,7 +42,7 @@ export class StandardEntryService {
         code: dto.code,
         name: dto.name,
         description: dto.description || null,
-        lines: dto.lines as unknown as Record<string, unknown>[],
+        lines: dto.lines as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -73,10 +74,14 @@ export class StandardEntryService {
       data: {
         ...dto,
         lines: dto.lines
-          ? (dto.lines as unknown as Record<string, unknown>[])
+          ? (dto.lines as unknown as Prisma.InputJsonValue)
           : undefined,
       },
     });
+  }
+
+  async delete(companyId: string, id: string) {
+    return this.remove(companyId, id);
   }
 
   async remove(companyId: string, id: string) {

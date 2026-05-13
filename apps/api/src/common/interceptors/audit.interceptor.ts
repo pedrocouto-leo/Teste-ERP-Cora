@@ -34,10 +34,10 @@ export class AuditInterceptor implements NestInterceptor {
     const resource = this.extractResource(request.route?.path || request.url);
 
     return next.handle().pipe(
-      tap(async (responseData) => {
+      tap(async (responseData: unknown) => {
         try {
-          const resourceId =
-            request.params?.id || responseData?.data?.id || null;
+          const data = (responseData as { data?: { id?: string } } | null)?.data;
+          const resourceId = request.params?.id || data?.id || null;
 
           await this.prisma.auditLog.create({
             data: {
@@ -47,15 +47,16 @@ export class AuditInterceptor implements NestInterceptor {
               resource,
               resourceId,
               before: request.body?._previousState || null,
-              after: responseData?.data || request.body || null,
+              after: data || request.body || null,
               ip: request.ip || request.connection?.remoteAddress,
               userAgent: request.headers?.['user-agent']?.substring(0, 500),
             },
           });
         } catch (error) {
+          const err = error as Error;
           this.logger.error(
-            `Failed to create audit log: ${error.message}`,
-            error.stack,
+            `Failed to create audit log: ${err.message}`,
+            err.stack,
           );
         }
       }),

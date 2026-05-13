@@ -13,7 +13,7 @@ export class HolidayService {
   async create(
     companyId: string,
     dto: CreateHolidayDto,
-    createdBy: string,
+    _createdBy: string,
   ) {
     const existing = await this.prisma.holiday.findFirst({
       where: {
@@ -37,7 +37,6 @@ export class HolidayService {
         scope: dto.scope,
         state: dto.state,
         municipalityCode: dto.municipalityCode,
-        createdBy,
       },
     });
   }
@@ -82,11 +81,11 @@ export class HolidayService {
     companyId: string,
     id: string,
     dto: Partial<CreateHolidayDto>,
-    updatedBy: string,
+    _updatedBy: string,
   ) {
     const holiday = await this.findOne(companyId, id);
 
-    const data: Record<string, unknown> = { ...dto, updatedBy };
+    const data: Record<string, unknown> = { ...dto };
     if (dto.date) {
       data.date = new Date(dto.date);
     }

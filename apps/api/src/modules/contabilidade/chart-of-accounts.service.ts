@@ -44,6 +44,10 @@ export class ChartOfAccountsService {
     return chart;
   }
 
+  async getTree(companyId: string, id: string) {
+    return this.findOneWithAccounts(companyId, id);
+  }
+
   async findOneWithAccounts(companyId: string, id: string) {
     const chart = await this.prisma.chartOfAccounts.findFirst({
       where: { id, companyId },
@@ -76,6 +80,10 @@ export class ChartOfAccountsService {
         validTo: dto.validTo ? new Date(dto.validTo) : undefined,
       },
     });
+  }
+
+  async delete(companyId: string, id: string) {
+    return this.remove(companyId, id);
   }
 
   async remove(companyId: string, id: string) {

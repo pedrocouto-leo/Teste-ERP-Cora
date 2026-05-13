@@ -138,28 +138,42 @@ export class JournalEntryService {
 
   async findAll(
     companyId: string,
-    filters?: {
+    pagination: { page?: number; limit?: number } = {},
+    filters: {
       periodId?: string;
       status?: string;
-      dateFrom?: string;
-      dateTo?: string;
-    },
+      startDate?: string;
+      endDate?: string;
+    } = {},
   ) {
+    const { page = 1, limit = 50 } = pagination;
+    const skip = (page - 1) * limit;
+
     const where: Record<string, unknown> = { companyId };
-    if (filters?.periodId) where.periodId = filters.periodId;
-    if (filters?.status) where.status = filters.status;
-    if (filters?.dateFrom || filters?.dateTo) {
+    if (filters.periodId) where.periodId = filters.periodId;
+    if (filters.status) where.status = filters.status;
+    if (filters.startDate || filters.endDate) {
       const dateFilter: Record<string, Date> = {};
-      if (filters.dateFrom) dateFilter.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) dateFilter.lte = new Date(filters.dateTo);
+      if (filters.startDate) dateFilter.gte = new Date(filters.startDate);
+      if (filters.endDate) dateFilter.lte = new Date(filters.endDate);
       where.date = dateFilter;
     }
 
-    return this.prisma.journalEntry.findMany({
-      where,
-      include: { lines: { include: { account: true } } },
-      orderBy: { entryNumber: 'desc' },
-    });
+    const [data, total] = await Promise.all([
+      this.prisma.journalEntry.findMany({
+        where,
+        skip,
+        take: limit,
+        include: { lines: { include: { account: true } } },
+        orderBy: { entryNumber: 'desc' },
+      }),
+      this.prisma.journalEntry.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(companyId: string, id: string) {
@@ -176,6 +190,10 @@ export class JournalEntryService {
     }
 
     return entry;
+  }
+
+  async submit(companyId: string, id: string, _userId: string) {
+    return this.submitForApproval(companyId, id);
   }
 
   async submitForApproval(companyId: string, id: string) {
@@ -197,8 +215,8 @@ export class JournalEntryService {
   async approve(
     companyId: string,
     id: string,
-    userId: string,
     dto: ApproveEntryDto,
+    userId: string,
   ) {
     const entry = await this.findOne(companyId, id);
 
@@ -226,6 +244,10 @@ export class JournalEntryService {
       },
       include: { lines: true },
     });
+  }
+
+  async delete(companyId: string, id: string) {
+    return this.remove(companyId, id);
   }
 
   async remove(companyId: string, id: string) {
