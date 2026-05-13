@@ -44,7 +44,9 @@ export class ContractService {
 
       const start = new Date(dto.startDate);
       const end = new Date(dto.endDate);
-      const months = this.monthsBetween(start, end);
+      // Inclusive month count: a contract running 2026-01-01 → 2026-12-31
+      // covers 12 months and therefore generates 12 monthly installments.
+      const months = this.monthsBetween(start, end) + 1;
 
       if (months <= 0) {
         throw new BadRequestException(
@@ -57,7 +59,9 @@ export class ContractService {
 
       for (let i = 0; i < months; i++) {
         const dueDate = new Date(start);
-        dueDate.setMonth(dueDate.getMonth() + i + 1);
+        // First installment due on the contract start date; subsequent ones
+        // shift forward by one month each. UTC-safe.
+        dueDate.setUTCMonth(dueDate.getUTCMonth() + i);
 
         const isLast = i === months - 1;
         const amount = isLast ? Number(remainder.toFixed(4)) : monthlyAmount;
@@ -487,9 +491,13 @@ export class ContractService {
   }
 
   private monthsBetween(start: Date, end: Date): number {
+    // Use UTC to make the result timezone-deterministic: ISO date strings
+    // ('2026-01-01') parse as UTC midnight, but getMonth()/getFullYear()
+    // return *local* components which shift the year/month boundary in any
+    // timezone west of UTC, breaking installment counts on CI vs dev.
     return (
-      (end.getFullYear() - start.getFullYear()) * 12 +
-      (end.getMonth() - start.getMonth())
+      (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+      (end.getUTCMonth() - start.getUTCMonth())
     );
   }
 }
